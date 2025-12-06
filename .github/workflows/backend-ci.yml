@@ -45,7 +45,9 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aosdb
-        run: pnpm build
+        run: |
+          pnpm db:generate
+          pnpm build
 
       - name: Run e2e tests
         working-directory: backend
