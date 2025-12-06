@@ -1,0 +1,90 @@
+#######################################################################
+# infra/Dockerfile.backend
+#
+# Simple and robust multi-stage Dockerfile for NestJS backend
+# using pnpm & corepack. All dependencies are installed only
+# inside Linux images, no node_modules copying between stages.
+#######################################################################
+
+########################
+# base: Node + pnpm
+########################
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN corepack enable
+
+
+########################
+# builder: install deps, generate Prisma, build NestJS
+########################
+FROM base AS builder
+
+WORKDIR /app
+
+# Workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Package manifests for all workspace projects that backend may depend on
+COPY backend/package.json backend/package.json
+COPY shared/package.json shared/package.json
+
+# Install all workspace dependencies (dev + prod) with a locked graph
+RUN pnpm install --frozen-lockfile
+
+# Copy full monorepo sources (Docker build context = repo root)
+COPY . .
+
+# Ensure local node_modules for the backend workspace package exist
+RUN pnpm install --filter backend --prod=false
+
+# Explicitly install dev dependencies for @aos/shared and build it
+RUN pnpm install --filter @aos/shared --prod=false --frozen-lockfile \
+  && pnpm --filter @aos/shared build
+
+# Generate Prisma client (needs dev dependencies for prisma CLI)
+WORKDIR /app/backend
+RUN pnpm exec prisma generate
+
+# Build NestJS
+RUN pnpm build
+
+# Compile seed script (NestJS doesn't compile it automatically)
+RUN pnpm exec tsc src/seeds/seed.ts --outDir dist/seeds --esModuleInterop --resolveJsonModule --skipLibCheck --module nodenext --moduleResolution nodenext
+
+
+########################
+# runner: minimal runtime image
+########################
+FROM base AS runner
+
+WORKDIR /app/backend
+
+ENV NODE_ENV=production
+
+# Copy workspace metadata needed for pnpm to resolve the backend workspace
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY backend/package.json ./package.json
+
+# Copy node_modules from builder to ensure @aos/shared workspace link is available
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/backend/node_modules ./node_modules
+COPY --from=builder /app/shared /app/shared
+
+# Copy Prisma schema (needed for Prisma Client generation)
+COPY --from=builder /app/backend/prisma ./prisma
+
+# Copy built backend code from builder (including compiled seed)
+COPY --from=builder /app/backend/dist ./dist
+
+# Copy entrypoint script
+COPY backend/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+EXPOSE 3001
+
+CMD ["./entrypoint.sh"]

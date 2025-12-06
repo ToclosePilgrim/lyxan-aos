@@ -1,0 +1,122 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aosdb
+      POSTGRES_USER: aos
+      POSTGRES_PASSWORD: aos
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aos -d aosdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aos-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: aos-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - aos-net
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    container_name: aos-backend
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3001}
+      # Явно задаём корректный URL для контейнера (игнорируем DATABASE_URL из .env для Docker)
+      DATABASE_URL: ${BACKEND_DATABASE_URL:-postgresql://aos:aos@postgres:5432/aosdb?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-changeme}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - aos-net
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.frontend
+    container_name: aos-frontend
+    restart: unless-stopped
+    working_dir: /app/frontend
+    command: ["pnpm", "start"]
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PORT: ${FRONTEND_PORT:-3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:3001/api}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - aos-net
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: aos-n8n
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      N8N_HOST: "localhost"
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_PROTOCOL: "http"
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - aos-net
+
+networks:
+  aos-net:
+
+volumes:
+  postgres_data:

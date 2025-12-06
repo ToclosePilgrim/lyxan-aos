@@ -1,0 +1,76 @@
+#######################################################################
+# infra/Dockerfile.frontend
+#
+# Simple and robust multi-stage Dockerfile for Next.js frontend
+# using pnpm & corepack. All dependencies are installed only
+# inside Linux images, no node_modules copying between stages.
+#######################################################################
+
+########################
+# base: Node + pnpm
+########################
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN corepack enable
+
+
+########################
+# builder: install deps & build
+########################
+FROM base AS builder
+
+WORKDIR /app
+
+# Workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Package manifests for all workspace projects that frontend may depend on
+COPY frontend/package.json frontend/package.json
+COPY backend/package.json backend/package.json
+COPY shared/package.json shared/package.json
+
+# Install all workspace dependencies (dev + prod) with a locked graph
+RUN pnpm install --frozen-lockfile
+
+# Copy full monorepo sources (Docker build context = repo root)
+COPY . .
+
+# Ensure local node_modules for the frontend workspace package exist
+RUN pnpm install --filter frontend --prod=false
+
+# Build only the frontend workspace package
+RUN pnpm --filter frontend build
+
+
+########################
+# runner: minimal runtime image
+########################
+FROM base AS runner
+
+WORKDIR /app/frontend
+
+ENV NODE_ENV=production
+
+# Copy workspace metadata needed for pnpm to resolve the frontend workspace
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY frontend/package.json ./package.json
+
+# Install ONLY production dependencies for frontend
+RUN cd /app && pnpm install --filter frontend --prod --no-optional --no-frozen-lockfile
+
+# Copy built frontend assets from builder
+COPY --from=builder /app/frontend/.next ./.next
+COPY --from=builder /app/frontend/public ./public
+COPY --from=builder /app/frontend/next.config.* ./
+COPY --from=builder /app/frontend/tsconfig.* ./
+COPY --from=builder /app/frontend/tailwind.config.* ./
+COPY --from=builder /app/frontend/postcss.config.* ./
+
+EXPOSE 3000
+
+CMD ["pnpm", "start"]

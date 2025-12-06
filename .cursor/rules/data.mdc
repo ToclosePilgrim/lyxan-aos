@@ -1,0 +1,30 @@
+## DATA & DATABASE SAFETY (VERY IMPORTANT)
+
+- Never intentionally delete or reset data without my explicit instruction.
+- Do NOT run or add commands like:
+  - `prisma migrate reset`
+  - `DROP DATABASE`, `DROP TABLE`, `TRUNCATE`
+  - `docker compose down -v`
+  - removing or renaming PostgreSQL volumes in `docker-compose.yml`
+- When changing the DB schema:
+  - Always create NEW Prisma migrations, never edit or delete existing ones.
+  - Prefer ADDITIVE changes (e.g. `ADD COLUMN` with NULL/DEFAULT) instead of destructive ones.
+  - If a change requires data migration, write a migration or script that PRESERVES existing data and transforms it, instead of dropping tables.
+
+- When modifying seed scripts:
+  - Seeds must be idempotent and NON-DESTRUCTIVE for user data.
+  - Use `upsert` or `create` with `skipDuplicates` instead of `deleteMany()` on tables that may already contain real data (suppliers, products, etc.).
+  - It is allowed to clear only purely technical/demo tables if necessary, but never without a comment explaining why.
+
+- Before suggesting or adding any potentially destructive command or migration, first:
+  - Explain what data can be lost.
+  - Add a big WARNING comment in the code.
+  - Assume I DO NOT WANT to lose existing data unless I explicitly say otherwise.
+
+- When adding new fields to existing entities (e.g. supplier legal/bank details):
+  - Try to map/populate new fields from existing ones where possible (e.g. splitting old `bankDetails` into `bankName`, `bic`, `accountNumber`, etc.).
+  - Keep old fields for some time (marked as deprecated) instead of removing them immediately, unless I explicitly ask to remove.
+
+---
+alwaysApply: true
+---

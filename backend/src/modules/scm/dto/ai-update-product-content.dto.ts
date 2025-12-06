@@ -1,0 +1,31 @@
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+
+export class AiUpdateProductContentDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  mpTitle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  mpShortDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8000)
+  mpDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(8000)
+  keywords?: string;
+
+  @IsOptional()
+  contentAttributes?: Record<string, unknown>;
+}
+
+
+
+
+

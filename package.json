@@ -1,0 +1,24 @@
+{
+  "name": "lyxan-aos",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "install:all": "pnpm install",
+    "dev:docker:up": "cd infra && docker compose up -d backend frontend postgres redis",
+    "dev:docker:down": "cd infra && docker compose down",
+    "dev:docker:build": "cd infra && docker compose build backend frontend",
+    "dev:backend:build": "pnpm --filter backend build",
+    "dev:frontend:build": "pnpm --filter frontend build",
+    "docker:up": "cd infra && docker compose up --build",
+    "docker:up:detached": "cd infra && docker compose up --build -d",
+    "docker:down": "cd infra && docker compose down",
+    "test": "pnpm --filter backend test",
+    "test:e2e": "pnpm --filter backend test:e2e",
+    "test:contracts": "pnpm --filter backend test:contracts",
+    "test:smoke": "pnpm --filter frontend test:smoke",
+    "test:all": "pnpm --filter backend test:all && pnpm --filter frontend test:smoke"
+  }
+}
+
+
+

@@ -1,0 +1,224 @@
+Lyxan AOS — Infrastructure Contract (v1.0)
+
+⚠️ Этот документ обязателен к соблюдению при любых изменениях в проекте Lyxan AOS.
+
+1. Общие принципы
+
+Ты работаешь внутри pnpm монорепозитория, в котором:
+
+backend = NestJS + Prisma
+
+frontend = Next.js
+
+shared = TypeScript library
+
+infra = Docker Compose + runtime images
+
+Любые изменения должны сохранять:
+
+консистентность зависимостей,
+
+работоспособность Docker-сборки,
+
+работоспособность e2e-тестов,
+
+корректную работу Prisma migrations.
+
+2. Работа с package.json и pnpm-lock.yaml
+2.1. Жёсткое правило №1
+
+Если меняешь package.json любого пакета — обязан обновить pnpm-lock.yaml командой:
+
+pnpm install
+
+2.2. После обновления зависимостей обязателен коммит:
+
+<package>/package.json
+
+pnpm-lock.yaml
+
+2.3. Нельзя изменять Dockerfile, чтобы обходить ошибки lockfile
+
+Запрещено:
+
+удалять --frozen-lockfile,
+
+заменять его на --no-frozen-lockfile,
+
+менять способ сборки зависимостей.
+
+Если Docker падает из-за lockfile — всегда обновить pnpm-lock.yaml, а не Dockerfile.
+
+3. Shared package (@aos/shared)
+3.1. Правильная структура
+shared/
+  src/(если есть)
+  index.ts
+  package.json
+  tsconfig.json
+  tsconfig.build.json
+
+3.2. Build-скрипт обязателен:
+{
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  }
+}
+
+3.3. Если backend использует shared в рантайме →
+
+@aos/shared должен быть в dependencies backend
+(не devDependencies).
+
+3.4. Docker обязан:
+
+В builder-стейдже выполнить:
+
+pnpm --filter @aos/shared build
+
+
+В runner скопировать build-артефакты:
+
+COPY --from=builder /app/shared /app/shared
+
+4. Prisma
+4.1. Единственное правильное место генерации Prisma client
+
+✔️ ТОЛЬКО в builder-stage, перед сборкой backend:
+
+pnpm exec prisma generate
+
+4.2. Запрещено использовать prisma generate в runner
+
+Причины:
+
+в runner нет devDependencies,
+
+prisma CLI может отсутствовать,
+
+ломаются контейнеры (это уже случалось).
+
+4.3. В runner запускаем только migrations
+
+Это делает entrypoint.sh:
+
+pnpm exec prisma migrate deploy
+
+5. Docker Multi-Stage Rules
+5.1. Builder
+
+В builder обязательно есть:
+
+все workspace node_modules,
+
+shared build,
+
+prisma CLI,
+
+backend TypeScript compiler.
+
+Действия builder:
+
+install dependencies (pnpm install --frozen-lockfile)
+
+build shared
+
+generate prisma
+
+build backend
+
+build frontend
+
+5.2. Runner
+
+В runner копируется только:
+
+/app/node_modules
+/app/shared
+/app/backend/dist
+/app/backend/prisma
+/frontend build artifacts
+
+
+Runner не содержит:
+
+devDependencies,
+
+TypeScript,
+
+prisma CLI.
+
+6. Работа с e2e-тестами
+6.1. Перед сдачей изменений ВСЕГДА должны проходить:
+pnpm test
+pnpm test:e2e
+
+6.2. Если меняется DTO / API контракт — необходимо:
+
+обновить e2e тесты,
+
+обновить e2e тестовые фикстуры,
+
+обновить e2e helpers.
+
+6.3. При ошибках 400/500 тесты должны выводить тело ответа
+
+Любой endpoint-тест обязан логировать res.body при ошибке.
+
+7. Запрещенные изменения
+
+Агент НЕ имеет права:
+
+❌ удалять --frozen-lockfile из Docker
+❌ изменять Dockerfile, чтобы «продавить» сборку
+❌ переносить prisma generate в runtime
+❌ устанавливать зависимости локально, но не обновлять lockfile
+❌ менять структуру workspace без явной инструкции
+❌ перемещать shared без фиксации tsconfig / Docker logic
+❌ менять версии Node / base image без согласования
+
+8. Обязательный self-check перед сдачей результата
+
+Каждый раз, перед тем как отправить архив или PR, Агент должен логически проверить:
+
+Backend build
+pnpm install
+pnpm build
+
+Backend tests
+pnpm test
+pnpm test:e2e
+
+Docker Build
+cd infra
+docker compose build backend frontend
+
+Монорепа
+
+Убедиться, что все workspace-пакеты видят друг друга.
+
+Проверить, что pnpm-lock.yaml не изменяется после pnpm install.
+
+9. Формат ответов Агента
+
+Каждое изменение должно приходить в формате:
+
+Что было изменено
+
+Почему это было сделано
+
+Какие файлы затронуты
+
+Как решение соответствует Infrastructure Contract
+
+Какие проверки нужно сделать (build/test/docker)
+
+10. Главный принцип
+
+Ты не просто вносишь изменения в код —
+ты поддерживаешь консистентность всей Lyxan AOS платформы:
+монорепы, Docker-сборки, тестов и инфраструктуры.
+
+---
+alwaysApply: true
+---

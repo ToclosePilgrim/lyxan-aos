@@ -1,0 +1,36 @@
+# Общие артефакты
+node_modules
+.pnpm
+.pnpm-store
+.turbo
+.cache
+
+# Frontend / Backend build artifacts
+frontend/.next
+frontend/out
+backend/dist
+dist
+coverage
+
+# Lock-файлы и workspace-конфиги НЕ игнорировать
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+
+# Git и логи
+.git
+.gitignore
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Docker служебные файлы (в контекст не отправляем, но в репо они есть)
+Dockerfile
+Dockerfile.*
+docker-compose.yml
+docker-compose.*.yml
+
+
+
+
+
