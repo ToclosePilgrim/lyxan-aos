@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { UpdateIntegrationDto } from './dto/update-integration.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -134,7 +130,10 @@ export class SettingsService {
     });
   }
 
-  async updateAgentScenario(id: string, dto: { name?: string; endpoint?: string }) {
+  async updateAgentScenario(
+    id: string,
+    dto: { name?: string; endpoint?: string },
+  ) {
     const scenario = await this.prisma.agentScenario.findUnique({
       where: { id },
     });

@@ -1,0 +1,6 @@
+# Temporary baseline allowlist for Prisma writes in e2e tests.
+# Goal (TZ 8.3.C): shrink to empty by replacing all Prisma writes with public APIs.
+#
+# Paths are relative to backend/ (repo root for this tool).
+#
+

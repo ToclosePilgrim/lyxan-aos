@@ -8,6 +8,3 @@ export const OZON_SELLER_BASE_URL =
 export const OZON_PERFORMANCE_BASE_URL =
   process.env.OZON_PERFORMANCE_BASE_URL || 'https://api-performance.ozon.ru';
 
-
-
-

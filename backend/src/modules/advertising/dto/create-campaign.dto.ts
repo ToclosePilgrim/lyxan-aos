@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  Min,
+  IsIn,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCampaignDto {
@@ -39,10 +46,4 @@ export class CreateCampaignDto {
   @Min(0)
   budget?: number;
 }
-
-
-
-
-
-
 

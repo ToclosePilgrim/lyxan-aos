@@ -16,7 +16,8 @@ export class IntegrationLogsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async log(params: LogParams) {
-    const { level, source, message, integrationId, agentRunId, details } = params;
+    const { level, source, message, integrationId, agentRunId, details } =
+      params;
 
     return this.prisma.integrationLog.create({
       data: {
@@ -32,27 +33,29 @@ export class IntegrationLogsService {
 
   async info(
     message: string,
-    context: Omit<LogParams, 'level' | 'source' | 'message'> & { source: LogSource },
+    context: Omit<LogParams, 'level' | 'source' | 'message'> & {
+      source: LogSource;
+    },
   ) {
     return this.log({ level: 'INFO', message, ...context });
   }
 
   async warn(
     message: string,
-    context: Omit<LogParams, 'level' | 'source' | 'message'> & { source: LogSource },
+    context: Omit<LogParams, 'level' | 'source' | 'message'> & {
+      source: LogSource;
+    },
   ) {
     return this.log({ level: 'WARN', message, ...context });
   }
 
   async error(
     message: string,
-    context: Omit<LogParams, 'level' | 'source' | 'message'> & { source: LogSource },
+    context: Omit<LogParams, 'level' | 'source' | 'message'> & {
+      source: LogSource;
+    },
   ) {
     return this.log({ level: 'ERROR', message, ...context });
   }
 }
-
-
-
-
 

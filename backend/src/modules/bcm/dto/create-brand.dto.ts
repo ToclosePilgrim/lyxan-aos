@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsArray, IsOptional, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  IsOptional,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateBrandDto {
   @IsString()
@@ -24,4 +30,3 @@ export class CreateBrandDto {
   @MaxLength(5000)
   toneOfVoice?: string;
 }
-

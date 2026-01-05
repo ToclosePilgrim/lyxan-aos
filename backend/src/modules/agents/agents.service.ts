@@ -53,7 +53,11 @@ export class AgentsService {
     );
 
     // Log agent run start if integrationId is provided in params
-    if (dto.params && typeof dto.params === 'object' && 'integrationId' in dto.params) {
+    if (
+      dto.params &&
+      typeof dto.params === 'object' &&
+      'integrationId' in dto.params
+    ) {
       const integrationId = dto.params.integrationId as string | undefined;
       if (integrationId) {
         await this.integrationLogs.info('Agent run started for integration', {
@@ -141,7 +145,8 @@ export class AgentsService {
 
     // Determine status from payload
     const status = payload.status === 'success' ? 'SUCCESS' : 'ERROR';
-    const error = payload.status === 'error' ? payload.error || payload.message : null;
+    const error =
+      payload.status === 'error' ? payload.error || payload.message : null;
     const output = payload.data || payload.result || payload;
 
     // Update AgentRun
@@ -160,7 +165,9 @@ export class AgentsService {
     // Log agent run completion if integrationId is provided in payload or input
     const integrationId =
       (payload.integrationId as string | undefined) ||
-      (agentRun.input && typeof agentRun.input === 'object' && 'integrationId' in agentRun.input
+      (agentRun.input &&
+      typeof agentRun.input === 'object' &&
+      'integrationId' in agentRun.input
         ? (agentRun.input as { integrationId?: string }).integrationId
         : undefined);
 

@@ -11,4 +11,3 @@ import { IntegrationLogsModule } from '../integration-logs/integration-logs.modu
   exports: [AgentsService],
 })
 export class AgentsModule {}
-

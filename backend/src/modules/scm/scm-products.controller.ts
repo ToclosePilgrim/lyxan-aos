@@ -118,15 +118,14 @@ export class ScmProductsController {
     status: 204,
     description: 'The SCM product has been successfully deleted.',
   })
-  @ApiResponse({ status: 400, description: 'Cannot delete: has associated listings' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete: has associated listings',
+  })
   @ApiResponse({ status: 404, description: 'SCM product not found' })
   @ApiCookieAuth()
   async remove(@Param('id') id: string) {
     await this.scmProductsService.remove(id);
   }
 }
-
-
-
-
 

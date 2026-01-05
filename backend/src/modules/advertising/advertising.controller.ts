@@ -34,7 +34,11 @@ export class AdvertisingController {
 
   @Get('campaigns')
   @ApiOperation({ summary: 'Get list of advertising campaigns' })
-  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter by status',
+  })
   @ApiQuery({ name: 'search', required: false, description: 'Search by name' })
   @ApiResponse({ status: 200, description: 'List of campaigns' })
   @ApiCookieAuth()
@@ -48,8 +52,16 @@ export class AdvertisingController {
   @Get('campaigns/:id')
   @ApiOperation({ summary: 'Get campaign by ID' })
   @ApiParam({ name: 'id', description: 'Campaign ID' })
-  @ApiQuery({ name: 'dateFrom', required: false, description: 'Start date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'dateTo', required: false, description: 'End date (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    description: 'Start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    description: 'End date (YYYY-MM-DD)',
+  })
   @ApiResponse({ status: 200, description: 'Campaign details with stats' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   @ApiCookieAuth()
@@ -99,7 +111,10 @@ export class AdvertisingController {
   @ApiOperation({ summary: 'Create ad statistics' })
   @ApiResponse({ status: 201, description: 'AdStats created successfully' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  @ApiResponse({ status: 409, description: 'Statistics for this date already exist' })
+  @ApiResponse({
+    status: 409,
+    description: 'Statistics for this date already exist',
+  })
   @ApiCookieAuth()
   createAdStats(@Body() createAdStatsDto: CreateAdStatsDto) {
     return this.advertisingService.createAdStats(createAdStatsDto);

@@ -45,6 +45,3 @@ export class FilterScmServicesDto {
   financialDocumentId?: string;
 }
 
-
-
-

@@ -20,6 +20,3 @@ export class UpdateIntegrationDto {
   @IsObject()
   config?: Record<string, unknown>;
 }
-
-
-

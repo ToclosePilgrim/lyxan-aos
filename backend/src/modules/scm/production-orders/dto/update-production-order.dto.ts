@@ -1,9 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsDateString,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ProductionOrderStatus } from '@prisma/client';
 
@@ -74,6 +69,15 @@ export class UpdateProductionOrderDto {
   notes?: string;
 
   @ApiProperty({
+    description: 'Accounting currency (e.g. RUB)',
+    required: false,
+    example: 'RUB',
+  })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiProperty({
     description: 'Production country ID',
     required: false,
   })
@@ -89,4 +93,3 @@ export class UpdateProductionOrderDto {
   @IsString()
   manufacturerId?: string;
 }
-

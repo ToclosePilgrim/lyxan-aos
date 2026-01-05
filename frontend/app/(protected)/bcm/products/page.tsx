@@ -71,46 +71,41 @@ export default function BcmProductsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Listings</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage marketplace listings
-            </p>
-          </div>
-          <Button asChild>
-            <Link href="/bcm/products/new">Create Listing</Link>
-          </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Products Catalog</h1>
+          <p className="text-muted-foreground mt-2">
+            Управление каталогом товаров
+          </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Listings</CardTitle>
+            <CardTitle>Товары</CardTitle>
             <CardDescription>
-              {products.length} listing(s)
+              {products.length} товар(ов)
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8">Loading...</div>
+              <div className="text-center py-8">Загрузка...</div>
             ) : products.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No listings found
+                Товары не найдены
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Listing Name</TableHead>
+                    <TableHead>Product Name</TableHead>
                     <TableHead>SKU Count</TableHead>
                     <TableHead>Marketplace</TableHead>
                     <TableHead>Published Status</TableHead>
                     <TableHead>Card Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(products || []).map((product) => (
+                  {products.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         {product.name}
@@ -128,7 +123,7 @@ export default function BcmProductsPage() {
                       <TableCell>
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/bcm/products/${product.id}`}>
-                            View Listing
+                            Открыть карточку
                           </Link>
                         </Button>
                       </TableCell>

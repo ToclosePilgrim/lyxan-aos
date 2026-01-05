@@ -19,7 +19,8 @@ export class CreateMarketplaceIntegrationDto {
   brandId: string;
 
   @ApiProperty({
-    description: 'Country ID (optional, will be taken from brand if not provided)',
+    description:
+      'Country ID (optional, will be taken from brand if not provided)',
     example: 'clx1234567890',
     required: false,
   })
@@ -27,4 +28,3 @@ export class CreateMarketplaceIntegrationDto {
   @IsString()
   countryId?: string;
 }
-

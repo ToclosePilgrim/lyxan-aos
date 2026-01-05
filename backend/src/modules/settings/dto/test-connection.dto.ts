@@ -7,7 +7,8 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class TestConnectionDto {
   @ApiProperty({
-    description: 'Ozon Seller API Client ID (optional, uses saved value if not provided)',
+    description:
+      'Ozon Seller API Client ID (optional, uses saved value if not provided)',
     example: '123456',
     required: false,
   })
@@ -16,7 +17,8 @@ export class TestConnectionDto {
   ozonSellerClientId?: string;
 
   @ApiProperty({
-    description: 'Ozon Seller API Token (optional, uses saved value if not provided)',
+    description:
+      'Ozon Seller API Token (optional, uses saved value if not provided)',
     example: 'token-here',
     required: false,
   })
@@ -25,7 +27,8 @@ export class TestConnectionDto {
   ozonSellerToken?: string;
 
   @ApiProperty({
-    description: 'Ozon Performance API Client ID (optional, uses saved value if not provided)',
+    description:
+      'Ozon Performance API Client ID (optional, uses saved value if not provided)',
     example: '789012',
     required: false,
   })
@@ -34,7 +37,8 @@ export class TestConnectionDto {
   ozonPerfClientId?: string;
 
   @ApiProperty({
-    description: 'Ozon Performance API Client Secret (optional, uses saved value if not provided)',
+    description:
+      'Ozon Performance API Client Secret (optional, uses saved value if not provided)',
     example: 'secret-here',
     required: false,
   })
@@ -42,4 +46,3 @@ export class TestConnectionDto {
   @IsString()
   ozonPerfClientSecret?: string;
 }
-

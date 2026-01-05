@@ -111,6 +111,3 @@ export class ScmServicesController {
   }
 }
 
-
-
-

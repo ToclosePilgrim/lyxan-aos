@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/api";
+import { useScope } from "@/context/scope-context";
 
 interface PnlData {
   totalRevenue: number;
@@ -20,14 +21,17 @@ interface PnlData {
 }
 
 export default function FinancePnlPage() {
+  const { ready, scopeKey } = useScope();
   const [pnl, setPnl] = useState<PnlData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
+    if (!ready) return;
     loadPnl();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, scopeKey]);
 
   const loadPnl = async () => {
     try {

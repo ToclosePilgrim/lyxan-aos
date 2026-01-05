@@ -9,6 +9,16 @@ const sections = [
     description: "Manage financial documents (invoices, bills, acts)",
   },
   {
+    name: "Overhead Rules",
+    href: "/finance/overhead-rules",
+    description: "Configure overhead allocation rules",
+  },
+  {
+    name: "Currency Rates",
+    href: "/finance/currency-rates",
+    description: "Manage FX rates against base currency",
+  },
+  {
     name: "Sales",
     href: "/finance/sales",
     description: "Sales financial reports",

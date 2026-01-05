@@ -33,7 +33,7 @@ export class LoggingInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap({
-        next: (data) => {
+        next: () => {
           const response = context.switchToHttp().getResponse();
           const delay = Date.now() - now;
           this.logger.log(
@@ -59,9 +59,3 @@ export class LoggingInterceptor implements NestInterceptor {
     );
   }
 }
-
-
-
-
-
-

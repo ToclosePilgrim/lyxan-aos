@@ -14,15 +14,19 @@ try {
   } else if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
   }
-} catch (error) {
+} catch {
   // Если файлы не найдены, используем переменные окружения из системы
-  console.warn('Warning: .env files not found, using system environment variables');
+  console.warn(
+    'Warning: .env files not found, using system environment variables',
+  );
 }
 
 // Проверяем, что TEST_DATABASE_URL установлен
 if (!process.env.TEST_DATABASE_URL) {
   console.error('ERROR: TEST_DATABASE_URL is not set');
-  console.error('Please set TEST_DATABASE_URL environment variable to point to your test database');
+  console.error(
+    'Please set TEST_DATABASE_URL environment variable to point to your test database',
+  );
   process.exit(1);
 }
 
@@ -30,7 +34,9 @@ if (!process.env.TEST_DATABASE_URL) {
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 
 console.log('🔧 Setting up test database...');
-console.log(`📊 Database URL: ${process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`);
+console.log(
+  `📊 Database URL: ${process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`,
+);
 
 try {
   // Применяем миграции
@@ -55,4 +61,3 @@ try {
   console.error(error);
   process.exit(1);
 }
-

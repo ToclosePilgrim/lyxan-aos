@@ -9,16 +9,6 @@ const sections = [
     description: "Manage internal products and SKU",
   },
   {
-    name: "Suppliers",
-    href: "/scm/suppliers",
-    description: "Manage suppliers for SCM products",
-  },
-  {
-    name: "Production",
-    href: "/scm/production-orders",
-    description: "Manage production orders",
-  },
-  {
     name: "Stocks",
     href: "/scm/stocks",
     description: "Manage warehouse stock levels",
@@ -27,11 +17,6 @@ const sections = [
     name: "Supplies",
     href: "/scm/supplies",
     description: "Manage product supplies",
-  },
-  {
-    name: "Warehouses",
-    href: "/scm/warehouses",
-    description: "Manage warehouses and locations",
   },
 ];
 

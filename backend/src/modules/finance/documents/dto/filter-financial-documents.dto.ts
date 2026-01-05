@@ -1,9 +1,6 @@
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  FinancialDocumentType,
-  FinancialDocumentStatus,
-} from '@prisma/client';
+import { FinancialDocumentType, FinancialDocumentStatus } from '@prisma/client';
 
 export class FilterFinancialDocumentsDto {
   @ApiProperty({
@@ -48,7 +45,4 @@ export class FilterFinancialDocumentsDto {
   @IsString()
   supplyId?: string;
 }
-
-
-
 

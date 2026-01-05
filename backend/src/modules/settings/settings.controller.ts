@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Param,
-  Body,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -86,7 +79,10 @@ export class SettingsController {
   @Roles('Admin')
   @ApiOperation({ summary: 'Create or update integration (Admin only)' })
   @ApiParam({ name: 'key', description: 'Integration key (e.g., "n8n")' })
-  @ApiResponse({ status: 200, description: 'Integration upserted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Integration upserted successfully',
+  })
   @ApiCookieAuth()
   upsertIntegration(
     @Param('key') key: string,
@@ -110,7 +106,10 @@ export class SettingsController {
   @Roles('Admin')
   @ApiOperation({ summary: 'Update agent scenario (Admin only)' })
   @ApiParam({ name: 'id', description: 'Agent scenario ID' })
-  @ApiResponse({ status: 200, description: 'Agent scenario updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Agent scenario updated successfully',
+  })
   @ApiResponse({ status: 404, description: 'Agent scenario not found' })
   @ApiCookieAuth()
   updateAgentScenario(

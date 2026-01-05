@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsEnum,
   IsISO8601,
+  IsBoolean,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -11,6 +12,8 @@ import {
   FinancialDocumentType,
   FinancialDocumentStatus,
   FinancialDocumentDirection,
+  FinanceLinkedDocType,
+  FinanceCapitalizationPolicy,
 } from '@prisma/client';
 
 export class CreateFinancialDocumentDto {
@@ -32,13 +35,25 @@ export class CreateFinancialDocumentDto {
   @IsISO8601()
   docDate?: string;
 
+  // Backward-compatible alias (some flows still send `date`)
+  @ApiProperty({
+    description: 'Alias for docDate',
+    required: false,
+    example: '2025-01-15T00:00:00.000Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  date?: string;
+
   @ApiProperty({
     description: 'Document type',
     enum: FinancialDocumentType,
     required: false,
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
   @IsEnum(FinancialDocumentType)
   type?: FinancialDocumentType;
 
@@ -68,6 +83,73 @@ export class CreateFinancialDocumentDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @ApiProperty({
+    description:
+      'Legal entity ID (if not provided, will be resolved from linked doc)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  legalEntityId?: string;
+
+  @ApiProperty({
+    description: 'P&L category ID',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  pnlCategoryId?: string;
+
+  @ApiProperty({
+    description: 'Cashflow category ID',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cashflowCategoryId?: string;
+
+  @ApiProperty({
+    description: 'Capitalization policy',
+    enum: FinanceCapitalizationPolicy,
+    required: false,
+    default: FinanceCapitalizationPolicy.EXPENSE_IMMEDIATE,
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
+  @IsEnum(FinanceCapitalizationPolicy)
+  capitalizationPolicy?: FinanceCapitalizationPolicy;
+
+  @ApiProperty({
+    description: 'Recognition period start (required for PREPAID_EXPENSE)',
+    required: false,
+    example: '2025-01-01T00:00:00.000Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  recognizedFrom?: string;
+
+  @ApiProperty({
+    description: 'Recognition period end (required for PREPAID_EXPENSE)',
+    required: false,
+    example: '2025-12-31T23:59:59.999Z',
+  })
+  @IsOptional()
+  @IsISO8601()
+  recognizedTo?: string;
+
+  @ApiProperty({
+    description:
+      'Useful life in months (required for FIXED_ASSET / INTANGIBLE)',
+    required: false,
+    example: 36,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  usefulLifeMonths?: number;
 
   @ApiProperty({
     description: 'Total amount',
@@ -123,6 +205,25 @@ export class CreateFinancialDocumentDto {
   scmSupplyId?: string;
 
   @ApiProperty({
+    description: 'Linked document type',
+    required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
+  @IsEnum(FinanceLinkedDocType)
+  linkedDocType?: FinanceLinkedDocType;
+
+  @ApiProperty({
+    description: 'Linked document ID',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  linkedDocId?: string;
+
+  @ApiProperty({
     description: 'Purchase ID',
     required: false,
   })
@@ -161,4 +262,13 @@ export class CreateFinancialDocumentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({
+    description: 'Mark document as auto-created by system',
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isAutoCreated?: boolean;
 }

@@ -1,0 +1,34 @@
+import { ACCOUNTING_ACCOUNTS } from './accounting-accounts.config';
+
+export const PNL_ACCOUNT_GROUPS = {
+  // NOTE: arrays are explicitly widened to `readonly string[]` to allow `includes(account: string)`
+  // on values coming from DB (Prisma models store accounts as `string`).
+  REVENUE: [
+    ACCOUNTING_ACCOUNTS.SALES_REVENUE,
+    ACCOUNTING_ACCOUNTS.OTHER_OPERATING_REVENUE,
+  ] as readonly string[],
+  OTHER_REVENUE: [
+    ACCOUNTING_ACCOUNTS.INVENTORY_ADJUSTMENT_GAIN,
+  ] as readonly string[],
+  COGS: [ACCOUNTING_ACCOUNTS.COGS] as readonly string[],
+  MARKETPLACE_FEES: [ACCOUNTING_ACCOUNTS.MARKETPLACE_FEES] as readonly string[],
+  REFUNDS: [ACCOUNTING_ACCOUNTS.SALES_REFUNDS] as readonly string[],
+  LOGISTICS: [ACCOUNTING_ACCOUNTS.LOGISTICS_EXPENSES] as readonly string[],
+  OPEX: [
+    ACCOUNTING_ACCOUNTS.RENT_EXPENSE,
+    ACCOUNTING_ACCOUNTS.SALARIES,
+    ACCOUNTING_ACCOUNTS.MARKETING_EXPENSES,
+  ] as readonly string[],
+  ADJUSTMENTS: [ACCOUNTING_ACCOUNTS.INVENTORY_SHRINKAGE] as readonly string[],
+};
+
+export const PNL_RELEVANT_ACCOUNTS = [
+  ...PNL_ACCOUNT_GROUPS.REVENUE,
+  ...PNL_ACCOUNT_GROUPS.OTHER_REVENUE,
+  ...PNL_ACCOUNT_GROUPS.COGS,
+  ...PNL_ACCOUNT_GROUPS.MARKETPLACE_FEES,
+  ...PNL_ACCOUNT_GROUPS.REFUNDS,
+  ...PNL_ACCOUNT_GROUPS.LOGISTICS,
+  ...PNL_ACCOUNT_GROUPS.OPEX,
+  ...PNL_ACCOUNT_GROUPS.ADJUSTMENTS,
+];

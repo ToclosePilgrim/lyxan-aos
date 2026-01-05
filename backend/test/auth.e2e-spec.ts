@@ -58,4 +58,3 @@ describe('Auth e2e', () => {
     await app.close();
   });
 });
-

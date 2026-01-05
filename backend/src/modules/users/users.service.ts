@@ -65,7 +65,9 @@ export class UsersService {
     });
 
     if (existingUser) {
-      throw new ConflictException(`User with email ${createUserDto.email} already exists`);
+      throw new ConflictException(
+        `User with email ${createUserDto.email} already exists`,
+      );
     }
 
     // Check if role exists
@@ -74,7 +76,9 @@ export class UsersService {
     });
 
     if (!role) {
-      throw new NotFoundException(`Role with ID ${createUserDto.roleId} not found`);
+      throw new NotFoundException(
+        `Role with ID ${createUserDto.roleId} not found`,
+      );
     }
 
     // Hash password

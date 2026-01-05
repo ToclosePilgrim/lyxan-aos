@@ -53,9 +53,3 @@ export class UpdateAdStatsDto {
   revenue?: number;
 }
 
-
-
-
-
-
-

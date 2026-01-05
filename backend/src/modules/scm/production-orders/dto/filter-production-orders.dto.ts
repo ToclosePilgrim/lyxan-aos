@@ -1,10 +1,11 @@
-import { IsOptional, IsString, IsDateString, IsArray, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsDateString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ProductionOrderStatus } from '@prisma/client';
 
 export class FilterProductionOrdersDto {
   @ApiProperty({
-    description: 'Filter by status (can be multiple, comma-separated string or array)',
+    description:
+      'Filter by status (can be multiple, comma-separated string or array)',
     required: false,
     isArray: true,
     enum: ProductionOrderStatus,
@@ -72,4 +73,3 @@ export class FilterProductionOrdersDto {
   @IsString()
   limit?: string;
 }
-

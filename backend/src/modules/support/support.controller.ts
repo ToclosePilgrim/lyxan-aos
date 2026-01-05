@@ -32,24 +32,39 @@ export class SupportController {
 
   @Get('reviews')
   @ApiOperation({ summary: 'Get list of reviews' })
-  @ApiQuery({ name: 'rating', required: false, description: 'Filter by exact rating', type: Number })
-  @ApiQuery({ name: 'minRating', required: false, description: 'Filter by minimum rating', type: Number })
-  @ApiQuery({ name: 'skuId', required: false, description: 'Filter by SKU ID' })
-  @ApiQuery({ name: 'dateFrom', required: false, description: 'Filter from date (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'dateTo', required: false, description: 'Filter to date (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'rating',
+    required: false,
+    description: 'Filter by exact rating',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'minRating',
+    required: false,
+    description: 'Filter by minimum rating',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    description: 'Filter from date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    description: 'Filter to date (YYYY-MM-DD)',
+  })
   @ApiResponse({ status: 200, description: 'List of reviews' })
   @ApiCookieAuth()
   getReviews(
     @Query('rating') rating?: string,
     @Query('minRating') minRating?: string,
-    @Query('skuId') skuId?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
     const filters: any = {};
     if (rating) filters.rating = parseInt(rating, 10);
     if (minRating) filters.minRating = parseInt(minRating, 10);
-    if (skuId) filters.skuId = skuId;
     if (dateFrom) filters.dateFrom = dateFrom;
     if (dateTo) filters.dateTo = dateTo;
 
@@ -59,7 +74,6 @@ export class SupportController {
   @Post('reviews')
   @ApiOperation({ summary: 'Create a review (for testing)' })
   @ApiResponse({ status: 201, description: 'Review created successfully' })
-  @ApiResponse({ status: 404, description: 'SKU not found' })
   @ApiResponse({ status: 400, description: 'Invalid date format' })
   @ApiCookieAuth()
   createReview(@Body() createReviewDto: CreateReviewDto) {
@@ -98,7 +112,10 @@ export class SupportController {
 
   @Post('tickets')
   @ApiOperation({ summary: 'Create a support ticket' })
-  @ApiResponse({ status: 201, description: 'Support ticket created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Support ticket created successfully',
+  })
   @ApiCookieAuth()
   createTicket(@Body() createTicketDto: CreateTicketDto) {
     return this.supportService.createTicket(createTicketDto);
@@ -107,7 +124,10 @@ export class SupportController {
   @Patch('tickets/:id/status')
   @ApiOperation({ summary: 'Update support ticket status' })
   @ApiParam({ name: 'id', description: 'Ticket ID' })
-  @ApiResponse({ status: 200, description: 'Ticket status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Ticket status updated successfully',
+  })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
   @ApiCookieAuth()
   updateTicketStatus(

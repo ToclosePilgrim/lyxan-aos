@@ -51,25 +51,13 @@ describe('SCM ↔ BCM Link e2e', () => {
       where: { code: 'TEST_BRAND' },
     });
 
-    // Очищаем перед запуском
-    await prisma.product.deleteMany({});
-    await prisma.scmProduct.deleteMany({});
+    // Очищаем перед запуском с учетом зависимостей
+    // No Prisma cleanup here: e2e must not write to DB directly.
   });
 
   afterAll(async () => {
     // Очищаем созданные данные
-    if (prisma) {
-      if (createdListingId) {
-        await prisma.product.deleteMany({
-          where: { id: createdListingId },
-        });
-      }
-      if (createdScmProductId) {
-        await prisma.scmProduct.deleteMany({
-          where: { id: createdScmProductId },
-        });
-      }
-    }
+    // No Prisma cleanup here: e2e must not write to DB directly.
 
     if (app) {
       await app.close();
@@ -115,7 +103,9 @@ describe('SCM ↔ BCM Link e2e', () => {
 
   it('POST /api/bcm/products should create BCM listing with scmProductId', async () => {
     if (!createdScmProductId) {
-      throw new Error('SCM Product ID not set. Run create SCM product test first.');
+      throw new Error(
+        'SCM Product ID not set. Run create SCM product test first.',
+      );
     }
 
     const token = await loginAsAdmin();
@@ -160,7 +150,9 @@ describe('SCM ↔ BCM Link e2e', () => {
     expect(Array.isArray(res.body.listings)).toBe(true);
     expect(res.body.listings.length).toBeGreaterThan(0);
 
-    const listing = res.body.listings.find((l: { id: string }) => l.id === createdListingId);
+    const listing = res.body.listings.find(
+      (l: { id: string }) => l.id === createdListingId,
+    );
     expect(listing).toBeDefined();
     expect(listing).toHaveProperty('name', 'Test Listing');
   });
@@ -181,8 +173,13 @@ describe('SCM ↔ BCM Link e2e', () => {
     expect(res.body.product).toHaveProperty('id', createdListingId);
     expect(res.body.product).toHaveProperty('scmProduct');
     expect(res.body.product.scmProduct).toBeDefined();
-    expect(res.body.product.scmProduct).toHaveProperty('id', createdScmProductId);
-    expect(res.body.product.scmProduct).toHaveProperty('internalName', 'Test SCM Product');
+    expect(res.body.product.scmProduct).toHaveProperty(
+      'id',
+      createdScmProductId,
+    );
+    expect(res.body.product.scmProduct).toHaveProperty(
+      'internalName',
+      'Test SCM Product',
+    );
   });
 });
-

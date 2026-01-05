@@ -73,18 +73,6 @@ interface ProductionOrderData {
     actualEndAt: string | null;
     productionSite: string | null;
     notes: string | null;
-    productionCountryId: string | null;
-    productionCountry: {
-      id: string;
-      name: string;
-      code: string;
-    } | null;
-    manufacturerId: string | null;
-    manufacturer: {
-      id: string;
-      name: string;
-      code: string;
-    } | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -129,17 +117,6 @@ interface ProductionOrderData {
 }
 
 interface Supplier {
-  id: string;
-  name: string;
-  code: string;
-  country: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
-}
-
-interface Country {
   id: string;
   name: string;
   code: string;
@@ -189,8 +166,6 @@ export default function ProductionOrderDetailPage() {
   const [supplierItems, setSupplierItems] = useState<SupplierItem[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [warehouses, setWarehouses] = useState<Array<{ id: string; name: string; code: string }>>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [manufacturers, setManufacturers] = useState<Supplier[]>([]);
   const [supplies, setSupplies] = useState<Array<{
     id: string;
     code: string;
@@ -217,8 +192,6 @@ export default function ProductionOrderDetailPage() {
     actualEndAt: "",
     productionSite: "",
     notes: "",
-    productionCountryId: "",
-    manufacturerId: "",
   });
 
   const [itemFormData, setItemFormData] = useState({
@@ -240,41 +213,11 @@ export default function ProductionOrderDetailPage() {
     financialDocument: { number: string; status: string } | null;
     comment: string | null;
   }>>([]);
-  const [costBreakdown, setCostBreakdown] = useState<{
-    productionOrderId: string;
-    quantityProduced: number | null;
-    currency: string;
-    materialsTotal: number;
-    servicesTotal: number;
-    otherTotal: number;
+  const [costSummary, setCostSummary] = useState<{
+    materialCost: { total: number; currency: string };
+    servicesCost: { total: number; currency: string };
     totalCost: number;
-    unitCost: number | null;
-    materials: Array<{
-      supplyId: string;
-      supplyCode: string;
-      supplyItemId: string;
-      supplierItemName: string;
-      quantity: number;
-      unit: string;
-      pricePerUnit: number;
-      total: number;
-    }>;
-    services: Array<{
-      serviceOperationId: string;
-      name: string;
-      supplierName: string | null;
-      quantity: number | null;
-      unit: string | null;
-      price: number;
-      total: number;
-    }>;
-    otherDocuments: Array<{
-      financialDocumentId: string;
-      type: string;
-      status: string;
-      number: string;
-      amountTotal: number;
-    }>;
+    currency: string;
   } | null>(null);
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
@@ -298,20 +241,9 @@ export default function ProductionOrderDetailPage() {
       loadWarehouses();
       loadSupplies();
       loadServices();
-      loadCostBreakdown();
-      loadCountries();
-      loadManufacturers();
+      loadCostSummary();
     }
   }, [orderId]);
-
-  useEffect(() => {
-    // Filter manufacturers by selected country if country is selected
-    if (formData.productionCountryId) {
-      loadManufacturers(formData.productionCountryId);
-    } else {
-      loadManufacturers();
-    }
-  }, [formData.productionCountryId]);
 
   useEffect(() => {
     if (selectedSupplierId) {
@@ -345,8 +277,6 @@ export default function ProductionOrderDetailPage() {
           : "",
         productionSite: data.order.productionSite || "",
         notes: data.order.notes || "",
-        productionCountryId: data.order.productionCountryId || "",
-        manufacturerId: data.order.manufacturerId || "",
       });
     } catch (error) {
       console.error("Failed to load production order:", error);
@@ -381,37 +311,10 @@ export default function ProductionOrderDetailPage() {
 
   const loadWarehouses = async () => {
     try {
-      const data = await apiRequest<{ items: Array<{ id: string; name: string; code: string }> }>("/scm/warehouses");
-      setWarehouses(Array.isArray(data.items) ? data.items : []);
+      const data = await apiRequest<Array<{ id: string; name: string; code: string }>>("/scm/warehouses");
+      setWarehouses(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to load warehouses:", error);
-    }
-  };
-
-  const loadCountries = async () => {
-    try {
-      const data = await apiRequest<Country[]>("/org/countries?limit=100");
-      setCountries(Array.isArray(data) ? data.filter(c => c?.id) : []);
-    } catch (error) {
-      console.error("Failed to load countries:", error);
-      setCountries([]);
-    }
-  };
-
-  const loadManufacturers = async (countryId?: string) => {
-    try {
-      const params = new URLSearchParams();
-      params.append("types", "MANUFACTURER");
-      params.append("limit", "100");
-      if (countryId) {
-        params.append("countryId", countryId);
-      }
-      const query = params.toString();
-      const data = await apiRequest<Supplier[]>(`/scm/suppliers?${query}`);
-      setManufacturers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Failed to load manufacturers:", error);
-      // Don't show error toast, just log it
     }
   };
 
@@ -536,47 +439,17 @@ export default function ProductionOrderDetailPage() {
     }
   };
 
-  const loadCostBreakdown = async () => {
+  const loadCostSummary = async () => {
     try {
       const data = await apiRequest<{
-        productionOrderId: string;
-        quantityProduced: number | null;
-        currency: string;
-        materialsTotal: number;
-        servicesTotal: number;
-        otherTotal: number;
+        materialCost: { total: number; currency: string };
+        servicesCost: { total: number; currency: string };
         totalCost: number;
-        unitCost: number | null;
-        materials: Array<{
-          supplyId: string;
-          supplyCode: string;
-          supplyItemId: string;
-          supplierItemName: string;
-          quantity: number;
-          unit: string;
-          pricePerUnit: number;
-          total: number;
-        }>;
-        services: Array<{
-          serviceOperationId: string;
-          name: string;
-          supplierName: string | null;
-          quantity: number | null;
-          unit: string | null;
-          price: number;
-          total: number;
-        }>;
-        otherDocuments: Array<{
-          financialDocumentId: string;
-          type: string;
-          status: string;
-          number: string;
-          amountTotal: number;
-        }>;
-      }>(`/scm/production-orders/${orderId}/cost`);
-      setCostBreakdown(data);
+        currency: string;
+      }>(`/scm/production-orders/${orderId}/cost-summary`);
+      setCostSummary(data);
     } catch (error) {
-      console.error("Failed to load cost breakdown:", error);
+      console.error("Failed to load cost summary:", error);
     }
   };
 
@@ -653,7 +526,7 @@ export default function ProductionOrderDetailPage() {
       setServiceDialogOpen(false);
       setEditingService(null);
       await loadServices();
-      await loadCostBreakdown();
+      await loadCostSummary();
     } catch (error: any) {
       console.error("Failed to save service:", error);
       toast.error("Failed to save service", {
@@ -675,7 +548,7 @@ export default function ProductionOrderDetailPage() {
       });
       toast.success("Service deleted successfully");
       await loadServices();
-      await loadCostBreakdown();
+      await loadCostSummary();
     } catch (error: any) {
       console.error("Failed to delete service:", error);
       toast.error("Failed to delete service", {
@@ -710,12 +583,6 @@ export default function ProductionOrderDetailPage() {
       }
       if (formData.notes !== (orderData.order.notes || "")) {
         payload.notes = formData.notes || null;
-      }
-      if (formData.productionCountryId !== (orderData.order.productionCountryId || "")) {
-        payload.productionCountryId = formData.productionCountryId || null;
-      }
-      if (formData.manufacturerId !== (orderData.order.manufacturerId || "")) {
-        payload.manufacturerId = formData.manufacturerId || null;
       }
 
       await apiRequest(`/scm/production-orders/${orderId}`, {
@@ -934,22 +801,16 @@ export default function ProductionOrderDetailPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="name">Custom name (optional)</Label>
+                  <Label htmlFor="name">Name</Label>
                   {isEditing ? (
-                    <>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
-                        placeholder="Leave empty to auto-generate"
-                        disabled={saving}
-                      />
-                      <p className="text-sm text-muted-foreground mt-1">
-                        If empty, the name will be generated automatically from product and quantity (e.g. "Vimty Serum — batch 5000 pcs").
-                      </p>
-                    </>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      disabled={saving}
+                    />
                   ) : (
                     <p className="text-sm">{orderData.order.name}</p>
                   )}
@@ -1092,9 +953,6 @@ export default function ProductionOrderDetailPage() {
             <TabsTrigger value="components">Components</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="cost">Cost Summary</TabsTrigger>
-            <TabsTrigger value="finance">
-              Finance ({orderData?.financialDocuments?.length || 0})
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="components">
@@ -1312,192 +1170,38 @@ export default function ProductionOrderDetailPage() {
           <TabsContent value="cost">
             <Card>
               <CardHeader>
-                <CardTitle>Cost Breakdown / Себестоимость</CardTitle>
+                <CardTitle>Cost Summary</CardTitle>
                 <CardDescription>
-                  Detailed cost breakdown for this production order
+                  Total cost breakdown for this production order
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {costBreakdown ? (
-                  <div className="space-y-6">
-                    {/* Summary */}
+                {costSummary ? (
+                  <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label>Total Cost</Label>
-                        <p className="text-3xl font-bold">
-                          {costBreakdown.totalCost.toLocaleString()} {costBreakdown.currency}
-                        </p>
-                      </div>
-                      {costBreakdown.unitCost !== null && (
-                        <div>
-                          <Label>Unit Cost</Label>
-                          <p className="text-2xl font-bold">
-                            {costBreakdown.unitCost.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 4,
-                            })}{" "}
-                            {costBreakdown.currency}
-                          </p>
-                          {costBreakdown.quantityProduced && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              for {costBreakdown.quantityProduced} {orderData?.order.unit || "units"}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 border-t pt-4">
-                      <div>
-                        <Label>Materials</Label>
-                        <p className="text-xl font-semibold">
-                          {costBreakdown.materialsTotal.toLocaleString()} {costBreakdown.currency}
+                        <Label>Materials Cost</Label>
+                        <p className="text-2xl font-bold">
+                          {costSummary.materialCost.total.toLocaleString()} {costSummary.materialCost.currency}
                         </p>
                       </div>
                       <div>
-                        <Label>Services</Label>
-                        <p className="text-xl font-semibold">
-                          {costBreakdown.servicesTotal.toLocaleString()} {costBreakdown.currency}
-                        </p>
-                      </div>
-                      <div>
-                        <Label>Other Documents</Label>
-                        <p className="text-xl font-semibold">
-                          {costBreakdown.otherTotal.toLocaleString()} {costBreakdown.currency}
+                        <Label>Services Cost</Label>
+                        <p className="text-2xl font-bold">
+                          {costSummary.servicesCost.total.toLocaleString()} {costSummary.servicesCost.currency}
                         </p>
                       </div>
                     </div>
-
-                    {/* Materials Table */}
-                    {costBreakdown.materials.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Materials</h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Supply</TableHead>
-                              <TableHead>Item</TableHead>
-                              <TableHead>Quantity</TableHead>
-                              <TableHead>Price per Unit</TableHead>
-                              <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {costBreakdown.materials.map((material) => (
-                              <TableRow key={material.supplyItemId}>
-                                <TableCell className="font-medium">
-                                  {material.supplyCode}
-                                </TableCell>
-                                <TableCell>{material.supplierItemName}</TableCell>
-                                <TableCell>
-                                  {material.quantity} {material.unit}
-                                </TableCell>
-                                <TableCell>
-                                  {material.pricePerUnit.toLocaleString()} {costBreakdown.currency}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {material.total.toLocaleString()} {costBreakdown.currency}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    {/* Services Table */}
-                    {costBreakdown.services.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Services</h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Name</TableHead>
-                              <TableHead>Supplier</TableHead>
-                              <TableHead>Quantity</TableHead>
-                              <TableHead>Price</TableHead>
-                              <TableHead className="text-right">Total</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {costBreakdown.services.map((service) => (
-                              <TableRow key={service.serviceOperationId}>
-                                <TableCell className="font-medium">
-                                  {service.name}
-                                </TableCell>
-                                <TableCell>
-                                  {service.supplierName || "-"}
-                                </TableCell>
-                                <TableCell>
-                                  {service.quantity !== null
-                                    ? `${service.quantity} ${service.unit || ""}`
-                                    : "-"}
-                                </TableCell>
-                                <TableCell>
-                                  {service.price.toLocaleString()} {costBreakdown.currency}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {service.total.toLocaleString()} {costBreakdown.currency}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    {/* Other Documents Table */}
-                    {costBreakdown.otherDocuments.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-semibold mb-3">Other Financial Documents</h3>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Number</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead className="text-right">Amount</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {costBreakdown.otherDocuments.map((doc) => (
-                              <TableRow key={doc.financialDocumentId}>
-                                <TableCell>
-                                  <Badge variant="outline">{doc.type}</Badge>
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  {doc.number}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge
-                                    className={
-                                      STATUS_COLORS[doc.status] || "bg-gray-500"
-                                    }
-                                  >
-                                    {doc.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  {doc.amountTotal.toLocaleString()} {costBreakdown.currency}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-
-                    {costBreakdown.materials.length === 0 &&
-                      costBreakdown.services.length === 0 &&
-                      costBreakdown.otherDocuments.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          No cost data available. Add supplies, services, or financial documents.
-                        </div>
-                      )}
+                    <div className="border-t pt-4">
+                      <Label>Total Cost</Label>
+                      <p className="text-3xl font-bold">
+                        {costSummary.totalCost.toLocaleString()} {costSummary.currency}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    Loading cost breakdown...
+                    Loading cost summary...
                   </div>
                 )}
               </CardContent>

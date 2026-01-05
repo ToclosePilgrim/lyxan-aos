@@ -1,140 +1,119 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { Prisma, InventoryDirection } from '@prisma/client';
-
-type PrismaTransactionClient = Parameters<
-  Parameters<PrismaService['$transaction']>[0]
->[0];
+import {
+  assertRequired,
+  ScopeValidationException,
+} from '../../common/scope/scope.validation';
 
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async createAdjustment(params: {
+    warehouseId: string;
+    itemId: string;
+    quantity: Prisma.Decimal | number | string;
+    unitCost?: Prisma.Decimal | number | string | null;
+    currency?: string | null;
+    reason?: string | null;
+    meta?: Record<string, unknown>;
+  }) {
+    const wh = await this.prisma.warehouse.findUnique({
+      where: { id: params.warehouseId },
+      select: { id: true, countryId: true },
+    });
+    if (!wh) {
+      throw new ScopeValidationException(
+        'WAREHOUSE_NOT_FOUND',
+        `Warehouse ${params.warehouseId} not found`,
+        { warehouseId: params.warehouseId },
+      );
+    }
+    assertRequired(
+      wh.countryId,
+      'warehouse.countryId',
+      'WAREHOUSE_COUNTRY_REQUIRED',
+    );
+
+    const qty =
+      params.quantity instanceof Prisma.Decimal
+        ? params.quantity
+        : new Prisma.Decimal(params.quantity);
+    const unitCost =
+      params.unitCost === undefined || params.unitCost === null
+        ? null
+        : params.unitCost instanceof Prisma.Decimal
+          ? params.unitCost
+          : new Prisma.Decimal(params.unitCost);
+
+    return this.prisma.inventoryAdjustment.create({
+      data: {
+        warehouseId: params.warehouseId,
+        itemId: params.itemId,
+        quantity: qty,
+        unitCost,
+        currency: params.currency ?? null,
+        reason: params.reason ?? null,
+        meta: params.meta ? (params.meta as any) : undefined,
+      },
+    });
+  }
+
   async adjustBalance(params: {
     warehouseId: string;
-    productId?: string;
-    supplierItemId?: string;
-    quantityDelta: number; // >0 приход, <0 расход
-    comment?: string;
-    supplyId?: string;
-    supplyItemId?: string;
+    itemId: string;
+    quantityDelta: number;
   }) {
-    const {
-      warehouseId,
-      productId,
-      supplierItemId,
-      quantityDelta,
-      comment,
-      supplyId,
-      supplyItemId,
-    } = params;
-
-    // 1. Завести/обновить запись в InventoryBalance
-    const existing = await this.prisma.inventoryBalance.findFirst({
-      where: {
-        warehouseId,
-        productId: productId ?? null,
-        supplierItemId: supplierItemId ?? null,
-      },
-    });
-
-    const balance = existing
-      ? await this.prisma.inventoryBalance.update({
-          where: { id: existing.id },
-          data: {
-            quantity: {
-              increment: quantityDelta,
-            },
-          },
-        })
-      : await this.prisma.inventoryBalance.create({
-          data: {
-            warehouseId,
-            productId: productId ?? null,
-            supplierItemId: supplierItemId ?? null,
-            quantity: quantityDelta,
-          },
-        });
-
-    // 2. Записать движение
-    await this.prisma.inventoryTransaction.create({
-      data: {
-        warehouseId,
-        productId: productId ?? null,
-        supplierItemId: supplierItemId ?? null,
-        supplyId: supplyId ?? null,
-        supplyItemId: supplyItemId ?? null,
-        direction: quantityDelta >= 0 ? InventoryDirection.IN : InventoryDirection.OUT,
-        quantity: Math.abs(quantityDelta),
-        comment: comment ?? null,
-      },
-    });
-
-    return balance;
+    return this.adjustBalanceWithTx(this.prisma as any, params);
   }
 
   async adjustBalanceWithTx(
-    tx: PrismaTransactionClient,
-    params: {
-      warehouseId: string;
-      productId?: string;
-      supplierItemId?: string;
-      quantityDelta: number;
-      comment?: string;
-      supplyId?: string;
-      supplyItemId?: string;
-    },
+    tx: Prisma.TransactionClient | PrismaService,
+    params: { warehouseId: string; itemId: string; quantityDelta: number },
   ) {
-    const {
-      warehouseId,
-      productId,
-      supplierItemId,
-      quantityDelta,
-      comment,
-      supplyId,
-      supplyItemId,
-    } = params;
-
-    // 1. Завести/обновить запись в InventoryBalance
-    const existing = await tx.inventoryBalance.findFirst({
-      where: {
-        warehouseId,
-        productId: productId ?? null,
-        supplierItemId: supplierItemId ?? null,
-      },
+    const { warehouseId, itemId, quantityDelta } = params;
+    const existing = await (tx as any).inventoryBalance.findFirst({
+      where: { warehouseId, itemId },
     });
-
     const balance = existing
-      ? await tx.inventoryBalance.update({
+      ? await (tx as any).inventoryBalance.update({
           where: { id: existing.id },
-          data: {
-            quantity: {
-              increment: quantityDelta,
-            },
-          },
+          data: { quantity: { increment: quantityDelta } },
         })
-      : await tx.inventoryBalance.create({
-          data: {
-            warehouseId,
-            productId: productId ?? null,
-            supplierItemId: supplierItemId ?? null,
-            quantity: quantityDelta,
-          },
+      : await (tx as any).inventoryBalance.create({
+          data: { warehouseId, itemId, quantity: quantityDelta },
         });
 
-    // 2. Записать движение
-    await tx.inventoryTransaction.create({
-      data: {
-        warehouseId,
-        productId: productId ?? null,
-        supplierItemId: supplierItemId ?? null,
-        supplyId: supplyId ?? null,
-        supplyItemId: supplyItemId ?? null,
-        direction: quantityDelta >= 0 ? InventoryDirection.IN : InventoryDirection.OUT,
-        quantity: Math.abs(quantityDelta),
-        comment: comment ?? null,
-      },
-    });
+    if (quantityDelta !== 0) {
+      const mdmItem = await (tx as any).mdmItem.findUnique({
+        where: { id: itemId },
+        select: { unit: true },
+      });
+      const unit = mdmItem?.unit ?? 'pcs';
+      const stock = await (tx as any).scmStock.findFirst({
+        where: { warehouseId, itemId },
+        select: { id: true },
+      });
+      if (stock) {
+        await (tx as any).scmStock.update({
+          where: { id: stock.id },
+          data: {
+            quantity: { increment: new Prisma.Decimal(quantityDelta) },
+            unit,
+          },
+        });
+      } else {
+        await (tx as any).scmStock.create({
+          data: {
+            warehouseId,
+            itemId,
+            quantity: new Prisma.Decimal(quantityDelta),
+            unit,
+          },
+        });
+      }
+    }
 
     return balance;
   }
@@ -143,28 +122,8 @@ export class InventoryService {
     return this.prisma.inventoryBalance.findMany({
       where: { warehouseId },
       include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        supplierItem: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            type: true,
-            category: true,
-            unit: true,
-            supplier: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-              },
-            },
-          },
+        MdmItem: {
+          select: { id: true, type: true, code: true, name: true, unit: true },
         },
       },
       orderBy: { updatedAt: 'desc' },
@@ -174,37 +133,7 @@ export class InventoryService {
   async getTransactionsForSupply(supplyId: string) {
     return this.prisma.inventoryTransaction.findMany({
       where: { supplyId },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        supplierItem: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-            unit: true,
-          },
-        },
-        warehouse: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-        supplyItem: {
-          select: {
-            id: true,
-            quantityOrdered: true,
-            quantityReceived: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

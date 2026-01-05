@@ -15,8 +15,9 @@
     "test": "pnpm --filter backend test",
     "test:e2e": "pnpm --filter backend test:e2e",
     "test:contracts": "pnpm --filter backend test:contracts",
+    "test:frontend": "pnpm --filter frontend test",
     "test:smoke": "pnpm --filter frontend test:smoke",
-    "test:all": "pnpm --filter backend test:all && pnpm --filter frontend test:smoke"
+    "test:all": "pnpm --filter backend test:all && pnpm --filter frontend test && pnpm --filter frontend test:smoke"
   }
 }
 

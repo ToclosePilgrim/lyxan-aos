@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  Min,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAdStatsDto {
@@ -68,10 +75,4 @@ export class CreateAdStatsDto {
   @Min(0)
   revenue?: number;
 }
-
-
-
-
-
-
 

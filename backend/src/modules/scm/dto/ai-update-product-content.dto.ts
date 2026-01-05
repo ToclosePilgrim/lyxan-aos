@@ -1,5 +1,7 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
+// LEGACY DTO: legacy Product content. Deprecated, do not use in new code.
+
 export class AiUpdateProductContentDto {
   @IsOptional()
   @IsString()
@@ -24,8 +26,3 @@ export class AiUpdateProductContentDto {
   @IsOptional()
   contentAttributes?: Record<string, unknown>;
 }
-
-
-
-
-

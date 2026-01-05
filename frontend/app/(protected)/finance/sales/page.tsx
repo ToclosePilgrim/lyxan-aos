@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiRequest } from "@/lib/api";
+import { useScope } from "@/context/scope-context";
 
 interface FinanceReport {
   id: string;
@@ -57,6 +58,7 @@ interface Sku {
 }
 
 export default function FinanceSalesPage() {
+  const { ready, scopeKey } = useScope();
   const [reports, setReports] = useState<FinanceReport[]>([]);
   const [skus, setSkus] = useState<Sku[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,9 +81,11 @@ export default function FinanceSalesPage() {
   });
 
   useEffect(() => {
+    if (!ready) return;
     loadReports();
     loadSkus();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, scopeKey]);
 
   const loadReports = async () => {
     try {

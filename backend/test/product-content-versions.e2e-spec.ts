@@ -45,11 +45,7 @@ describe('Product Content Versions e2e', () => {
   });
 
   afterAll(async () => {
-    await prisma.productContentVersion.deleteMany({ where: { productId } });
-    await prisma.sku.deleteMany({ where: { productId } });
-    await prisma.product.deleteMany({ where: { id: productId } });
-    await prisma.scmProduct.deleteMany({ where: { id: scmProductId } });
-    await prisma.brand.deleteMany({ where: { id: brandId } });
+    await prisma.$disconnect();
     await app.close();
   });
 
@@ -76,7 +72,9 @@ describe('Product Content Versions e2e', () => {
       .expect(200);
 
     expect(versionsRes.body.length).toBeGreaterThanOrEqual(1);
-    const initialVersion = versionsRes.body.find((v: any) => v.source === 'SYSTEM');
+    const initialVersion = versionsRes.body.find(
+      (v: any) => v.source === 'SYSTEM',
+    );
     expect(initialVersion).toBeDefined();
     expect(initialVersion.comment).toBe('Initial version');
     expect(initialVersion.mpTitle).toBe('Initial Title');
@@ -90,7 +88,7 @@ describe('Product Content Versions e2e', () => {
     });
 
     await request
-      .patch(`/api/scm/products/${productId}`)
+      .patch(`/api/bcm/products/${productId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         mpTitle: 'Updated Title V1',
@@ -109,7 +107,9 @@ describe('Product Content Versions e2e', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    const manualVersion = versionsRes.body.find((v: any) => v.source === 'MANUAL');
+    const manualVersion = versionsRes.body.find(
+      (v: any) => v.source === 'MANUAL',
+    );
     expect(manualVersion).toBeDefined();
     expect(manualVersion.comment).toBe('Manual update via UI');
     expect(manualVersion.mpTitle).toBe('Updated Title V1');
@@ -201,17 +201,10 @@ describe('Product Content Versions e2e', () => {
 
     // Try to get another product's version using the current productId
     await request
-      .get(`/api/bcm/products/${productId}/content-versions/${anotherVersionId}`)
+      .get(
+        `/api/bcm/products/${productId}/content-versions/${anotherVersionId}`,
+      )
       .set('Authorization', `Bearer ${token}`)
       .expect(404);
-
-    // Cleanup
-    await prisma.productContentVersion.deleteMany({
-      where: { productId: anotherProductId },
-    });
-    await prisma.sku.deleteMany({ where: { productId: anotherProductId } });
-    await prisma.product.deleteMany({ where: { id: anotherProductId } });
   });
 });
-
-

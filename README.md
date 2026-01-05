@@ -118,6 +118,10 @@ pnpm docker:down             # остановить и очистить volume'�
   - API base: http://localhost:3001/api
   - Swagger: http://localhost:3001/api/docs
 
+## Архитектурные решения (ADR)
+
+- [`docs/adr/ADR-0001-mdm-counterparty-scm-supplier-boundary.md`](docs/adr/ADR-0001-mdm-counterparty-scm-supplier-boundary.md)
+
 - **PostgreSQL**
   - Host: localhost
   - Port: 5433 (внутри docker сети: postgres:5432)

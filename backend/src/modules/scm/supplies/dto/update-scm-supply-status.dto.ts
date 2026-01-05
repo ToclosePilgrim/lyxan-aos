@@ -1,7 +1,4 @@
-import {
-  IsEnum,
-  IsNotEmpty,
-} from 'class-validator';
+import { IsEnum, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ScmSupplyStatus } from '@prisma/client';
 
@@ -14,4 +11,3 @@ export class UpdateScmSupplyStatusDto {
   @IsNotEmpty()
   status: ScmSupplyStatus;
 }
-

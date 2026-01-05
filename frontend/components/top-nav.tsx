@@ -1,30 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/auth-context";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { t } from "@/lib/i18n";
-
-const navItems = [
-  { labelKey: "layout.nav.scm", href: "/scm" },
-  { labelKey: "layout.nav.bcm", href: "/bcm" },
-  { labelKey: "layout.nav.finance", href: "/finance" },
-  { labelKey: "layout.nav.advertising", href: "/advertising" },
-  { labelKey: "layout.nav.support", href: "/support" },
-  { labelKey: "layout.nav.analytics", href: "/analytics" },
-  { labelKey: "layout.nav.settings", href: "/settings" },
-];
+import { Button } from "@/components/ui/button";
+import { ScopeSelector } from "@/components/scope-selector";
 
 type User = {
   id: string;
@@ -32,72 +13,64 @@ type User = {
   role?: { name: string } | null;
 };
 
-export function TopNav({ user }: { user: User }) {
-  const pathname = usePathname();
-  const { logout } = useAuth();
-  const router = useRouter();
+const NAV_ITEMS: Array<{ href: string; label: string }> = [
+  { href: "/", label: "Home" },
+  { href: "/scm", label: "SCM" },
+  { href: "/bcm", label: "BCM" },
+  { href: "/finance", label: "Finance" },
+  { href: "/advertising", label: "Advertising" },
+  { href: "/support", label: "Support" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/settings", label: "Settings" },
+];
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
+export function TopNav({ user }: { user: User }) {
+  const pathname = usePathname() || "/";
+  const { logout } = useAuth();
 
   return (
     <div className="flex items-center gap-6">
-      <nav className="flex items-center gap-6">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/scm"
-              ? pathname?.startsWith("/scm")
-              : pathname?.startsWith(item.href);
+      <nav className="hidden md:flex items-center gap-1">
+        {NAV_ITEMS.map((it) => {
+          const active =
+            it.href === "/"
+              ? pathname === "/"
+              : pathname === it.href || pathname.startsWith(it.href + "/");
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={it.href}
+              href={it.href}
               className={cn(
-                "text-sm font-medium transition-colors hover:text-primary",
-                isActive
-                  ? "text-primary border-b-2 border-primary pb-1"
-                  : "text-muted-foreground"
+                "px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                active
+                  ? "text-foreground bg-muted"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
               )}
             >
-              {t(item.labelKey)}
+              {it.label}
             </Link>
           );
         })}
       </nav>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2">
-            <span className="text-sm">{user.email}</span>
-            {user.role && (
-              <Badge variant="secondary" className="text-xs">
-                {user.role.name}
-              </Badge>
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>
-            <div className="flex flex-col">
-              <span>{user.email}</span>
-              {user.role && (
-                <span className="text-xs text-muted-foreground">
-                  {user.role.name}
-                </span>
-              )}
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleLogout}>
-            {t("auth.logout.title")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="hidden lg:block">
+        <ScopeSelector />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="text-sm text-muted-foreground">
+          {user.email}
+          {user.role?.name ? (
+            <span className="ml-2 text-xs text-muted-foreground/70">
+              ({user.role.name})
+            </span>
+          ) : null}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => logout()}>
+          Logout
+        </Button>
+      </div>
     </div>
   );
 }
+

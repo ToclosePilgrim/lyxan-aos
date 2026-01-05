@@ -8,7 +8,7 @@ async function main() {
 
   // Create roles
   console.log('Creating roles...');
-  
+
   const adminRole = await prisma.role.upsert({
     where: { name: 'Admin' },
     update: {},
@@ -29,7 +29,7 @@ async function main() {
 
   // Create admin user
   console.log('Creating admin user...');
-  
+
   const hashedPassword = await bcrypt.hash('Tairai123', 10);
 
   const adminUser = await prisma.user.upsert({
@@ -114,9 +114,9 @@ async function main() {
   const brandWithCountries = await prisma.brand.findUnique({
     where: { code: 'TEST_BRAND' },
     include: {
-      countries: {
+      BrandCountry: {
         include: {
-          country: true,
+          Country: true,
         },
       },
     },
@@ -126,7 +126,8 @@ async function main() {
     id: brand.id,
     name: brand.name,
     code: brand.code,
-    countries: brandWithCountries?.countries.map((bc) => bc.country.name) || [],
+    countries:
+      brandWithCountries?.BrandCountry.map((bc) => bc.Country.name) || [],
   });
 
   // Create marketplaces
@@ -153,7 +154,9 @@ async function main() {
       create: marketplaceData,
     });
     marketplaces.push(marketplace);
-    console.log(`✅ Marketplace created: ${marketplace.name} (${marketplace.code})`);
+    console.log(
+      `✅ Marketplace created: ${marketplace.name} (${marketplace.code})`,
+    );
   }
 
   // Link marketplaces to countries
@@ -187,10 +190,10 @@ async function main() {
         },
       },
       update: {},
-        create: {
-          marketplaceId: wbMarketplace.id,
-          countryId: ruCountryForMarketplace.id,
-        },
+      create: {
+        marketplaceId: wbMarketplace.id,
+        countryId: ruCountryForMarketplace.id,
+      },
     });
   }
 
@@ -368,7 +371,9 @@ async function main() {
     console.log(`   ${s.name} (${s.key})`);
   });
   console.log('\n⚠️  Please change the password after first login!');
-  console.log('⚠️  Update agent scenario endpoints in database with real n8n webhook URLs!');
+  console.log(
+    '⚠️  Update agent scenario endpoints in database with real n8n webhook URLs!',
+  );
 }
 
 main()
@@ -379,4 +384,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

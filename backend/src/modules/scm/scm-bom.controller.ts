@@ -58,7 +58,10 @@ export class ScmBomController {
     description: 'The BOM item has been successfully created.',
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  @ApiResponse({ status: 404, description: 'Product or supplier item not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Product or supplier item not found',
+  })
   @ApiCookieAuth()
   async createBomItem(
     @Param('productId') productId: string,
@@ -120,7 +123,10 @@ export class ScmBomController {
     description: 'The BOM has been successfully replaced.',
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  @ApiResponse({ status: 404, description: 'Product or supplier item not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Product or supplier item not found',
+  })
   @ApiCookieAuth()
   async upsertBom(
     @Param('productId') productId: string,
@@ -129,7 +135,4 @@ export class ScmBomController {
     return this.scmBomService.upsertBom(productId, upsertDto);
   }
 }
-
-
-
 

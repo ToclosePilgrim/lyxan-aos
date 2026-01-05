@@ -1,10 +1,9 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
-  ApiQuery,
   ApiCookieAuth,
 } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
@@ -40,7 +39,3 @@ export class InventoryController {
     return this.inventoryService.getTransactionsForSupply(supplyId);
   }
 }
-
-
-
-

@@ -17,7 +17,6 @@ export class SupportService {
   async getReviews(filters?: {
     rating?: number;
     minRating?: number;
-    skuId?: string;
     dateFrom?: string;
     dateTo?: string;
   }) {
@@ -29,10 +28,6 @@ export class SupportService {
       where.rating = {
         gte: filters.minRating,
       };
-    }
-
-    if (filters?.skuId) {
-      where.skuId = filters.skuId;
     }
 
     if (filters?.dateFrom || filters?.dateTo) {
@@ -49,24 +44,6 @@ export class SupportService {
 
     const reviews = await this.prisma.review.findMany({
       where,
-      include: {
-        sku: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                brand: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
       orderBy: { date: 'desc' },
     });
 
@@ -74,17 +51,6 @@ export class SupportService {
   }
 
   async createReview(dto: CreateReviewDto) {
-    // Validate SKU if provided
-    if (dto.skuId) {
-      const sku = await this.prisma.sku.findUnique({
-        where: { id: dto.skuId },
-      });
-
-      if (!sku) {
-        throw new NotFoundException(`SKU with ID ${dto.skuId} not found`);
-      }
-    }
-
     // Validate date
     const date = new Date(dto.date);
     if (isNaN(date.getTime())) {
@@ -93,28 +59,9 @@ export class SupportService {
 
     return this.prisma.review.create({
       data: {
-        skuId: dto.skuId || null,
         rating: dto.rating,
         text: dto.text || null,
         date,
-      },
-      include: {
-        sku: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                brand: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
       },
     });
   }

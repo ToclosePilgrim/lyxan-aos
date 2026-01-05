@@ -71,7 +71,7 @@ describe('Listing Content Versions (e2e)', () => {
 
       // Update content fields
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({
           title: 'Updated Title',
@@ -134,19 +134,19 @@ describe('Listing Content Versions (e2e)', () => {
 
       // Make multiple updates
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ title: 'Version 1 Title' })
         .expect(200);
 
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ title: 'Version 2 Title' })
         .expect(200);
 
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ keywords: 'version 3 keywords' })
         .expect(200);
@@ -206,7 +206,7 @@ describe('Listing Content Versions (e2e)', () => {
 
       // Update with same content but saveVersion=true
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({
           title: 'Initial Title', // Same value
@@ -264,7 +264,7 @@ describe('Listing Content Versions (e2e)', () => {
 
       // Update non-content field (name)
       await request()
-        .patch(`/api/scm/products/${listingId}`)
+        .patch(`/api/bcm/products/${listingId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({
           name: 'Updated Name',
@@ -329,5 +329,3 @@ describe('Listing Content Versions (e2e)', () => {
     });
   });
 });
-
-

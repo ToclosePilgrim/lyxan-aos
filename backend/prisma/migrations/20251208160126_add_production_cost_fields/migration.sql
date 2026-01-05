@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "production_orders" ADD COLUMN     "currency" TEXT NOT NULL DEFAULT 'RUB',
+ADD COLUMN     "materialsCostTotal" DECIMAL(14,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "otherCostTotal" DECIMAL(14,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "producedItemId" TEXT,
+ADD COLUMN     "producedQty" DECIMAL(14,4),
+ADD COLUMN     "servicesCostTotal" DECIMAL(14,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "totalCost" DECIMAL(14,4) NOT NULL DEFAULT 0,
+ADD COLUMN     "unitCost" DECIMAL(14,4) NOT NULL DEFAULT 0;

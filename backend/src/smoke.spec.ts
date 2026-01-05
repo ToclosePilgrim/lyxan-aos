@@ -4,6 +4,3 @@ describe('Smoke test', () => {
   });
 });
 
-
-
-

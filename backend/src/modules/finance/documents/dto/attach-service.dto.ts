@@ -1,9 +1,4 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsArray,
-  ArrayMinSize,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsArray, ArrayMinSize } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AttachServiceDto {
@@ -18,7 +13,4 @@ export class AttachServiceDto {
   @IsNotEmpty({ each: true })
   serviceIds: string[];
 }
-
-
-
 

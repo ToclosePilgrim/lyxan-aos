@@ -11,12 +11,12 @@ import { ScmSupplyStatus } from '@prisma/client';
 
 export class CreateScmSupplyDto {
   @ApiProperty({
-    description: 'Supplier ID',
-    example: 'sup1',
+    description: 'Supplier Counterparty ID (MDM.Counterparty)',
+    example: 'cp_123',
   })
   @IsString()
   @IsNotEmpty()
-  supplierId: string;
+  supplierCounterpartyId: string;
 
   @ApiProperty({
     description: 'Warehouse ID',
@@ -25,6 +25,15 @@ export class CreateScmSupplyDto {
   @IsString()
   @IsNotEmpty()
   warehouseId: string;
+
+  @ApiProperty({
+    description:
+      'Brand ID (optional, but required for inventory/accounting scope on receipts)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  brandId?: string;
 
   @ApiProperty({
     description: 'Production Order ID (optional)',
@@ -41,7 +50,9 @@ export class CreateScmSupplyDto {
     default: ScmSupplyStatus.DRAFT,
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toUpperCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase() : value,
+  )
   @IsEnum(ScmSupplyStatus)
   status?: ScmSupplyStatus;
 

@@ -34,8 +34,16 @@ export class MarketplaceIntegrationsController {
 
   @Get()
   @ApiOperation({ summary: 'Get list of marketplace integrations' })
-  @ApiQuery({ name: 'brandId', required: false, description: 'Filter by brand ID' })
-  @ApiQuery({ name: 'countryId', required: false, description: 'Filter by country ID' })
+  @ApiQuery({
+    name: 'brandId',
+    required: false,
+    description: 'Filter by brand ID',
+  })
+  @ApiQuery({
+    name: 'countryId',
+    required: false,
+    description: 'Filter by country ID',
+  })
   @ApiQuery({
     name: 'marketplaceCode',
     required: false,
@@ -78,7 +86,10 @@ export class MarketplaceIntegrationsController {
     description: 'Marketplace integration created successfully',
   })
   @ApiResponse({ status: 400, description: 'Invalid data' })
-  @ApiResponse({ status: 404, description: 'Marketplace, Brand or Country not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Marketplace, Brand or Country not found',
+  })
   @ApiResponse({ status: 409, description: 'Integration already exists' })
   @ApiCookieAuth()
   @HttpCode(HttpStatus.CREATED)
@@ -95,7 +106,10 @@ export class MarketplaceIntegrationsController {
   })
   @ApiResponse({ status: 404, description: 'Integration not found' })
   @ApiCookieAuth()
-  update(@Param('id') id: string, @Body() dto: UpdateMarketplaceIntegrationDto) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateMarketplaceIntegrationDto,
+  ) {
     return this.marketplaceIntegrationsService.update(id, dto);
   }
 
@@ -109,12 +123,7 @@ export class MarketplaceIntegrationsController {
   @ApiResponse({ status: 404, description: 'Integration not found' })
   @ApiCookieAuth()
   @HttpCode(HttpStatus.OK)
-  testConnection(
-    @Param('id') id: string,
-    @Body() dto?: TestConnectionDto,
-  ) {
+  testConnection(@Param('id') id: string, @Body() dto?: TestConnectionDto) {
     return this.marketplaceIntegrationsService.testConnection(id, dto);
   }
 }
-
-

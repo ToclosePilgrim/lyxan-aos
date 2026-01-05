@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,76 +7,319 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============================================
-// 1. Org Structure
-// ============================================
+model AccountingEntry {
+  id                      String                    @id @default(uuid())
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  docType                 AccountingDocType
+  docId                   String
+  sourceDocType           AccountingDocType?
+  sourceDocId             String?
+  lineNumber              Int
+  postingDate             DateTime
+  debitAccount            String
+  creditAccount           String
+  amount                  Decimal                   @db.Decimal(18, 2)
+  currency                String
+  amountBase              Decimal                   @db.Decimal(18, 2)
+  description             String?
+  source                  String?
+  metadata                Json?
+  postingRunId            String?
+  countryId               String
+  brandId                 String
+  legalEntityId           String
+  marketplaceId           String?
+  warehouseId             String?
+  Brand                   Brand                     @relation(fields: [brandId], references: [id])
+  Country                 Country                   @relation(fields: [countryId], references: [id])
+  legalEntity             LegalEntity               @relation(fields: [legalEntityId], references: [id])
+  Marketplace             Marketplace?              @relation(fields: [marketplaceId], references: [id])
+  warehouse               Warehouse?                @relation(fields: [warehouseId], references: [id])
+  InventoryAccountingLink InventoryAccountingLink[]
+  CashAccountingLink      CashAccountingLink[]
+  AcquiringAccountingLink AcquiringAccountingLink[]
+  RecurringJournalRun     RecurringJournalRun[]
+  postingRun              AccountingPostingRun?     @relation(fields: [postingRunId], references: [id], onDelete: SetNull)
 
-model Country {
-  id        String   @id @default(cuid())
+  @@index([countryId, brandId, marketplaceId])
+  @@index([creditAccount])
+  @@index([debitAccount])
+  @@index([docType, docId])
+  @@index([legalEntityId, postingDate])
+  @@index([legalEntityId, docType, docId])
+  @@index([postingDate, countryId, brandId])
+  @@index([postingDate])
+  @@index([postingRunId])
+}
+
+enum PostingRunStatus {
+  POSTED
+  VOIDED
+}
+
+model AccountingPostingRun {
+  id                String           @id @default(uuid())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  legalEntityId     String
+  docType           AccountingDocType
+  docId             String
+  version           Int
+  status            PostingRunStatus @default(POSTED)
+  postedAt          DateTime
+  voidedAt          DateTime?
+  voidReason        String?
+  reversalRunId     String?           @unique
+  repostedFromRunId String?           @unique
+
+  legalEntity       LegalEntity      @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  entries           AccountingEntry[]
+
+  reversalRun       AccountingPostingRun? @relation("posting_run_reversal", fields: [reversalRunId], references: [id], onDelete: SetNull)
+  reversedBy        AccountingPostingRun? @relation("posting_run_reversal")
+  repostedFrom      AccountingPostingRun? @relation("posting_run_repost", fields: [repostedFromRunId], references: [id], onDelete: SetNull)
+  repostedTo        AccountingPostingRun? @relation("posting_run_repost")
+
+  @@unique([docType, docId, version])
+  @@index([legalEntityId, docType, docId])
+  @@index([legalEntityId, status, postedAt])
+  @@map("accounting_posting_runs")
+}
+
+enum AcquiringEventType {
+  PAYMENT_CAPTURED
+  PAYMENT_REFUNDED
+  FEE_CHARGED
+  SETTLEMENT
+}
+
+enum AcquiringEventStatus {
+  IMPORTED
+  POSTED
+  IGNORED
+}
+
+enum AcquiringAccountingLinkRole {
+  PRINCIPAL
+  FEE
+  REFUND
+  SETTLEMENT
+}
+
+model AcquiringEvent {
+  id              String               @id @default(uuid())
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  legalEntityId    String
+  provider         String
+  eventType        AcquiringEventType
+  occurredAt       DateTime
+  amount           Decimal              @db.Decimal(18, 2)
+  currency         String
+  amountBase       Decimal              @db.Decimal(18, 2)
+  externalRef      String
+  orderId          String?
+  statementLineId  String?
+  status           AcquiringEventStatus @default(IMPORTED)
+  raw              Json?
+
+  legalEntity      LegalEntity          @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  statementLine    StatementLine?       @relation("AcquiringEventToStatementLine", fields: [statementLineId], references: [id], onDelete: SetNull)
+  AcquiringAccountingLink AcquiringAccountingLink[]
+
+  @@unique([legalEntityId, provider, externalRef, eventType])
+  @@index([legalEntityId, occurredAt])
+  @@index([provider, occurredAt])
+  @@index([status, occurredAt])
+  @@index([statementLineId])
+  @@map("acquiring_events")
+}
+
+model AcquiringAccountingLink {
+  id              String                     @id @default(uuid())
+  createdAt        DateTime                   @default(now())
+  acquiringEventId String
+  accountingEntryId String
+  role            AcquiringAccountingLinkRole
+
+  acquiringEvent  AcquiringEvent             @relation(fields: [acquiringEventId], references: [id], onDelete: Cascade)
+  accountingEntry AccountingEntry            @relation(fields: [accountingEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([acquiringEventId, accountingEntryId, role])
+  @@index([acquiringEventId])
+  @@index([accountingEntryId])
+  @@map("acquiring_accounting_links")
+}
+
+model CurrencyRate {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  currency   String
+  rateDate   DateTime
+  rateToBase Decimal  @db.Decimal(18, 6)
+  source     String?
+
+  @@unique([currency, rateDate])
+  @@index([currency, rateDate])
+}
+
+model AdCampaign {
+  id            String      @id @default(uuid())
+  marketplaceId String
+  name          String
+  status        String
+  budget        Float?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime @updatedAt
+  Marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+  AdStat        AdStat[]
+
+  @@index([marketplaceId])
+  @@index([status])
+  @@map("ad_campaigns")
+}
+
+model AdStat {
+  id          String     @id @default(uuid())
+  campaignId  String
+  date        DateTime
+  impressions Int?
+  clicks      Int?
+  spend       Float?
+  orders      Int?
+  revenue     Float?
+  createdAt   DateTime   @default(now())
+  AdCampaign  AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, date])
+  @@index([campaignId])
+  @@index([date])
+  @@map("ad_stats")
+}
+
+model AgentRun {
+  id             String           @id @default(uuid())
+  scenarioId     String?
+  agentKey       String
+  input          Json
+  output         Json?
+  status         String
+  error          String?
+  startedAt      DateTime         @default(now())
+  finishedAt     DateTime?
+  AgentScenario  AgentScenario?   @relation(fields: [scenarioId], references: [id])
+  IntegrationLog IntegrationLog[]
+
+  @@index([agentKey])
+  @@index([scenarioId])
+  @@index([startedAt])
+  @@index([status])
+  @@map("agent_runs")
+}
+
+model AgentScenario {
+  id        String     @id @default(uuid())
+  key       String     @unique
   name      String
-  code      String   @unique
-  createdAt DateTime @default(now())
+  endpoint  String
+  createdAt DateTime   @default(now())
   updatedAt DateTime @updatedAt
+  AgentRun  AgentRun[]
 
-  brands                  BrandCountry[]
-  legalEntities           LegalEntity[]
-  marketplaceCountries    MarketplaceCountry[]
-  marketplaceIntegrations MarketplaceIntegration[]
-  suppliers               Supplier[]
-  warehouses              Warehouse[]
-  productionOrders        ProductionOrder[]        @relation("ProductionOrderCountry")
-
-  @@map("countries")
+  @@index([key])
+  @@map("agent_scenarios")
 }
 
-model Brand {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  description String?  @db.Text
-  toneOfVoice String?  @db.Text
-  createdAt   DateTime @default(now())
+model BcmBrandProfile {
+  id          String                @id @default(uuid())
+  brandId     String
+  locale      String                @default("en")
+  status      BcmBrandProfileStatus
+  displayName String?
+  description String?
+  toneOfVoice String?
+  guidelines  String?
+  websiteUrl  String?
+  socialLinks Json?
+  assets      Json?
+  publishedAt DateTime?
+  createdAt   DateTime              @default(now())
   updatedAt   DateTime @updatedAt
+  Brand       Brand                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  countries               BrandCountry[]
-  products                Product[]
-  scmProducts             ScmProduct[]
-  marketplaceIntegrations MarketplaceIntegration[]
-
-  @@map("brands")
+  @@unique([brandId, locale, status])
+  @@index([brandId])
+  @@index([status])
+  @@map("bcm_brand_profiles")
 }
 
-model LegalEntity {
-  id          String   @id @default(cuid())
-  name        String
-  countryId   String
-  country     Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  inn         String?
-  kpp         String?
-  ogrn        String?
-  legalAddr   String?
-  bankName    String?
-  bik         String?
-  account     String?
-  corrAccount String?
-  director    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model BcmListingProfile {
+  id                   String                  @id @default(uuid())
+  itemId               String
+  marketplaceId        String
+  countryId            String
+  locale               String                  @default("en")
+  status               BcmListingProfileStatus
+  titleOverride        String?
+  descriptionOverride  String?
+  bulletPointsOverride Json?
+  attributes           Json?
+  mediaOverride        Json?
+  compliance           Json?
+  externalListingId    String?
+  publishedAt          DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime @updatedAt
+  Country              Country                 @relation(fields: [countryId], references: [id])
+  MdmItem              MdmItem                 @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  Marketplace          Marketplace             @relation(fields: [marketplaceId], references: [id])
 
-  brandCountries BrandCountry[]
+  @@unique([itemId, marketplaceId, countryId, locale, status], map: "bcm_listing_profiles_itemId_marketplaceId_countryId_locale_stat")
+  @@index([itemId])
+  @@index([marketplaceId, countryId], map: "bcm_listing_profiles_marketplace_country_idx")
+  @@index([status])
+  @@map("bcm_listing_profiles")
+}
 
-  @@index([countryId])
-  @@map("legal_entities")
+model BcmProductProfile {
+  id               String                  @id @default(uuid())
+  itemId           String
+  brandId          String?
+  locale           String                  @default("en")
+  status           BcmProductProfileStatus
+  title            String?
+  subtitle         String?
+  shortDescription String?
+  description      String?
+  bulletPoints     Json?
+  keyFeatures      Json?
+  ingredients      Json?
+  usage            String?
+  claims           Json?
+  seo              Json?
+  media            Json?
+  publishedAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime @updatedAt
+  Brand            Brand?                  @relation(fields: [brandId], references: [id])
+  MdmItem          MdmItem                 @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, locale, status])
+  @@index([brandId])
+  @@index([itemId])
+  @@index([status])
+  @@map("bcm_product_profiles")
 }
 
 model BrandCountry {
   brandId       String
   countryId     String
   legalEntityId String?
-
-  brand       Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  country     Country      @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  legalEntity LegalEntity? @relation(fields: [legalEntityId], references: [id], onDelete: SetNull)
+  Brand         Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  Country       Country      @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  LegalEntity   LegalEntity? @relation(fields: [legalEntityId], references: [id])
 
   @@id([brandId, countryId])
   @@index([brandId])
@@ -88,408 +328,686 @@ model BrandCountry {
   @@map("brand_countries")
 }
 
-model Marketplace {
-  id        String   @id @default(cuid())
+model Brand {
+  id                     String                   @id @default(uuid())
+  name                   String
+  code                   String                   @unique
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime @updatedAt
+  AccountingEntry        AccountingEntry[]
+  BcmBrandProfile        BcmBrandProfile[]
+  BcmProductProfile      BcmProductProfile[]
+  BrandCountry           BrandCountry[]
+  MarketplaceIntegration MarketplaceIntegration[]
+  SalesDocument          SalesDocument[]
+  ScmProduct             ScmProduct[]
+  scmSupplies            ScmSupply[]
+
+  @@map("brands")
+}
+
+model CounterpartyOffer {
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  legalEntityId  String
+  counterpartyId String
+  itemId         String
+  vendorCode     String?
+  name           String?
+  currencyCode   String
+  price          Decimal?        @db.Decimal(14, 4)
+  externalRef    String?
+  offerType      CounterpartyOfferType
+  status         CounterpartyOfferStatus @default(ACTIVE)
+  minOrderQty    Decimal?        @db.Decimal(14, 4)
+  leadTimeDays   Int?
+  isPrimary      Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  notes          String?
+  legalEntity    LegalEntity     @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  counterparty   Counterparty    @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  item           MdmItem         @relation(fields: [itemId], references: [id])
+  ScmSupplyItem  ScmSupplyItem[]
+
+  @@unique([legalEntityId, counterpartyId, itemId])
+  @@unique([legalEntityId, counterpartyId, externalRef])
+  @@index([legalEntityId, counterpartyId])
+  @@index([legalEntityId, itemId])
+  @@index([legalEntityId, status])
+  @@index([legalEntityId, offerType])
+  @@index([counterpartyId])
+  @@index([isActive])
+  @@index([itemId])
+  @@map("counterparty_offers")
+}
+
+model Country {
+  id                     String                   @id @default(uuid())
+  name                   String
+  code                   String                   @unique
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime @updatedAt
+  AccountingEntry        AccountingEntry[]
+  BcmListingProfile      BcmListingProfile[]
+  BrandCountry           BrandCountry[]
+  LegalEntity            LegalEntity[]
+  MarketplaceCountry     MarketplaceCountry[]
+  MarketplaceIntegration MarketplaceIntegration[]
+  ProductionOrder        ProductionOrder[]
+  SalesDocument          SalesDocument[]
+  counterparties         Counterparty[]
+  Warehous               Warehouse[]
+
+  @@map("countries")
+}
+
+model FinancePayment {
+  id                String            @id @default(uuid())
+  createdAt         DateTime          @default(now())
+  documentId        String
+  amount            Decimal           @db.Decimal(14, 4)
+  currency          String
+  date              DateTime
+  method            String?
+  externalRef       String?
+  comment           String?
+  FinancialDocument FinancialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("finance_payments")
+}
+
+model FinancialDocument {
+  id                String                      @id @default(uuid())
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  docNumber         String?
+  docDate           DateTime?
+  type              FinancialDocumentType?
+  direction         FinancialDocumentDirection?
+  status            FinancialDocumentStatus?    @default(DRAFT)
+  currency          String?
+  amountTotal       Decimal?                    @db.Decimal(14, 4)
+  amountPaid        Decimal?                    @db.Decimal(14, 4)
+  dueDate           DateTime?
+  legalEntityId     String
+  pnlCategoryId     String?
+  cashflowCategoryId String?
+  capitalizationPolicy FinanceCapitalizationPolicy @default(EXPENSE_IMMEDIATE)
+  recognizedFrom    DateTime?
+  recognizedTo      DateTime?
+  supplierId        String?
+  productionOrderId String?
+  scmSupplyId       String?
+  purchaseId        String?
+  expenseId         String?
+  externalId        String?
+  fileUrl           String?
+  notes             String?
+  number            String?
+  date              DateTime?
+  issueDate         DateTime?
+  paidDate          DateTime?
+  comment           String?
+  linkedDocId       String?
+  linkedDocType     FinanceLinkedDocType?
+  amountPaidBase    Decimal?                    @db.Decimal(18, 2)
+  amountTotalBase   Decimal?                    @db.Decimal(18, 2)
+  isAutoCreated     Boolean                     @default(false)
+  isAccrued         Boolean                     @default(false)
+  accruedAt         DateTime?
+  usefulLifeMonths  Int?
+  isAccruedToAP     Boolean                     @default(false)
+  sourceDocId       String?
+  sourceDocType     AccountingDocType?
+  FinancePayment    FinancePayment[]
+  productionOrder   ProductionOrder?            @relation(fields: [productionOrderId], references: [id])
+  scmSupply         ScmSupply?                  @relation(fields: [scmSupplyId], references: [id])
+  supplier          Counterparty?               @relation(fields: [supplierId], references: [id])
+  legalEntity       LegalEntity                 @relation(fields: [legalEntityId], references: [id])
+  pnlCategory       PnlCategory?                @relation(fields: [pnlCategoryId], references: [id])
+  cashflowCategory  CashflowCategory?           @relation(fields: [cashflowCategoryId], references: [id])
+  SalesDocument     SalesDocument[]
+  services          ScmServiceOperation[]
+  PaymentRequest    PaymentRequest[]
+  RecurringJournal  RecurringJournal[]
+
+  @@index([docNumber])
+  @@index([expenseId])
+  @@index([linkedDocId])
+  @@index([linkedDocType])
+  @@index([number])
+  @@index([productionOrderId])
+  @@index([purchaseId])
+  @@index([scmSupplyId])
+  @@index([status])
+  @@index([legalEntityId, docDate])
+  @@index([legalEntityId, status])
+  @@index([supplierId])
+  @@map("financial_documents")
+}
+
+enum RecurringJournalType {
+  PREPAID_RECOGNITION
+  DEPRECIATION
+  AMORTIZATION
+}
+
+enum RecurringJournalStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum RecurringJournalFrequency {
+  MONTHLY
+}
+
+enum JournalRunStatus {
+  POSTED
+  SKIPPED
+  ERROR
+}
+
+model RecurringJournal {
+  id              String                 @id @default(uuid())
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  legalEntityId   String
+  sourceDocumentId String?
+  journalType     RecurringJournalType
+  status          RecurringJournalStatus  @default(ACTIVE)
+  startDate       DateTime
+  endDate         DateTime?
+  frequency       RecurringJournalFrequency @default(MONTHLY)
+  dayOfMonth      Int                    @default(1)
+  amount          Decimal                @db.Decimal(18, 2)
+  currency        String
+  amountBase      Decimal                @db.Decimal(18, 2)
+  debitAccountId  String
+  creditAccountId String
+  pnlCategoryId   String?
+  cashflowCategoryId String?
+
+  legalEntity     LegalEntity            @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  sourceDocument  FinancialDocument?     @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  pnlCategory     PnlCategory?           @relation(fields: [pnlCategoryId], references: [id], onDelete: SetNull)
+  cashflowCategory CashflowCategory?     @relation(fields: [cashflowCategoryId], references: [id], onDelete: SetNull)
+  runs            RecurringJournalRun[]
+
+  @@index([legalEntityId, status, journalType])
+  @@index([sourceDocumentId])
+  @@map("recurring_journals")
+}
+
+model RecurringJournalRun {
+  id                String        @id @default(uuid())
+  createdAt         DateTime      @default(now())
+  recurringJournalId String
+  periodStart       DateTime
+  periodEnd         DateTime
+  runAt             DateTime
+  status            JournalRunStatus
+  accountingEntryId String?
+  errorMessage      String?
+
+  recurringJournal  RecurringJournal @relation(fields: [recurringJournalId], references: [id], onDelete: Cascade)
+  accountingEntry   AccountingEntry? @relation(fields: [accountingEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([recurringJournalId, periodStart, periodEnd])
+  @@index([recurringJournalId, periodStart])
+  @@map("recurring_journal_runs")
+}
+
+model PnlCategory {
+  id        String        @id @default(uuid())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  code      String        @unique
   name      String
-  code      String   @unique
-  logoUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  parentId  String?
+  isActive  Boolean       @default(true)
+  parent    PnlCategory?  @relation("pnl_categories_parent", fields: [parentId], references: [id], onDelete: SetNull)
+  children  PnlCategory[] @relation("pnl_categories_parent")
+  FinancialDocument FinancialDocument[]
+  PaymentRequest   PaymentRequest[]
+  FinanceCategoryDefaultMapping FinanceCategoryDefaultMapping[] @relation("FinanceCategoryDefaultMappingToPnlCategory")
+  RecurringJournal RecurringJournal[]
 
-  markets                MarketplaceCountry[]
-  products               Product[]
-  campaigns              AdCampaign[]
-  listingContentVersions ListingContentVersion[]
-  integrations           MarketplaceIntegration[]
-
-  @@map("marketplaces")
+  @@index([isActive])
+  @@index([parentId])
+  @@map("pnl_categories")
 }
 
-model MarketplaceCountry {
-  marketplaceId String
-  countryId     String
-
-  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
-  country     Country     @relation(fields: [countryId], references: [id], onDelete: Cascade)
-
-  @@id([marketplaceId, countryId])
-  @@index([marketplaceId])
-  @@index([countryId])
-  @@map("marketplace_countries")
-}
-
-// ============================================
-// 2. Users & Roles
-// ============================================
-
-model Role {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users User[]
-
-  @@map("roles")
-}
-
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  roleId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  role                   Role                    @relation(fields: [roleId], references: [id])
-  listingContentVersions ListingContentVersion[]
-  productContentVersions ProductContentVersion[]
-
-  @@index([email])
-  @@index([roleId])
-  @@map("users")
-}
-
-// ============================================
-// 3. SCM (Supply Chain Management)
-// ============================================
-
-// ============================================
-// 3.1. SCM Products (Internal Products)
-// ============================================
-
-model ScmProduct {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Базовая информация о продукте
-  internalName String // внутреннее наименование (обязательное)
-  sku          String? // внутренний артикул / SKU (опционально)
-  brandId      String?
-  brand        Brand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
-
-  // Описание / состав (минимум)
-  baseDescription String? // базовое описание (не под конкретный МП)
-  composition     String? @db.Text // состав (если есть)
-
-  /// Технические параметры (используются как источник правды)
-  netWeightGrams   Int?
-  grossWeightGrams Int?
-  lengthMm         Int?
-  widthMm          Int?
-  heightMm         Int?
-
-  barcode String?
-
-  countryOfOriginCode String? // ISO alpha-2, например "RU"
-
-  /// Дополнительные тех. атрибуты в свободной форме (JSON), для точной подстройки под разные МП
-  technicalAttributes Json?
-
-  // Тип продукта
-  type ScmProductType @default(PURCHASED)
-
-  // Связь с BCM Listings (существующая модель Product)
-  products Product[]
-
-  // Связь с поставщиками
-  suppliers ScmProductSupplier[]
-
-  // BOM (Bill of Materials)
-  bomItems ScmBomItem[]
-
-  // Production Orders
-  productionOrders ProductionOrder[]
-
-  // Stocks
-  stocks ScmStock[]
-
-  @@index([brandId])
-  @@index([sku])
-  @@index([type])
-  @@map("scm_products")
-}
-
-// ============================================
-// 3.2. SCM Supplies & Stocks
-// ============================================
-
-model Product {
-  id            String   @id @default(cuid())
-  brandId       String
-  marketplaceId String?
-  name          String
-  category      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Новая связь на SCM-продукт
-  scmProductId String?
-  scmProduct   ScmProduct? @relation(fields: [scmProductId], references: [id], onDelete: SetNull)
-
-  // Контентные поля листинга (общие, но в первую очередь под OZON)
-  title            String? // Заголовок карточки на маркетплейсе (legacy)
-  subtitle         String? // Краткий подзаголовок (если нужен) (legacy)
-  shortDescription String? // Краткое описание / bullets в текстовом виде (legacy)
-  fullDescription  String? // Полное описание (legacy)
-  keywords         String? // Текстовое поле со списком ключей (через запятую/новую строку)
-  contentMeta      Json? // для расширений под конкретный маркетплейс (OZON attrs и т.п.) (legacy)
-
-  // Контентные поля для маркетплейса (OZON) с поддержкой AI
-  mpTitle            String? @db.Text // Основной заголовок для маркетплейса (OZON title)
-  mpSubtitle         String? @db.Text // Краткое описание (если требуется маркетплейсом)
-  mpShortDescription String? @db.Text // Краткое описание / benefits (для карточки)
-  mpDescription      String? @db.Text // Полное описание товара (HTML/Markdown/plain)
-  contentAttributes  Json? // Технические/маркетинговые атрибуты в виде JSON (будущее под OZON attributes)
-  aiContentEnabled   Boolean @default(true) // Флаг, что контент этого листинга может управляться AI-агентами
-
-  /// Технические параметры, которые будут отправляться на МП
-  netWeightGrams      Int?
-  grossWeightGrams    Int?
-  lengthMm            Int?
-  widthMm             Int?
-  heightMm            Int?
-  barcode             String?
-  countryOfOriginCode String?
-
-  technicalAttributes Json? // Технические атрибуты для маркетплейса
-
-  brand                  Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  marketplace            Marketplace?            @relation(fields: [marketplaceId], references: [id], onDelete: SetNull)
-  skus                   Sku[]
-  productCard            ProductCard?
-  contentVersions        ListingContentVersion[]
-  productContentVersions ProductContentVersion[]
-  scmSupplyItems         ScmSupplyItem[]
-  inventoryBalances      InventoryBalance[]
-  inventoryTransactions  InventoryTransaction[]  @relation("InventoryTransactions")
-
-  @@index([brandId])
-  @@index([marketplaceId])
-  @@index([scmProductId])
-  @@map("products")
-}
-
-model Sku {
-  id        String   @id @default(cuid())
-  productId String
-  code      String   @unique
-  name      String?
-  price     Float?
-  cost      Float?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  stocks         Stock[]
-  supplies       SupplyItem[]
-  financeReports FinanceReport[]
-  reviews        Review[]
-
-  @@index([productId])
-  @@index([code])
-  @@map("skus")
-}
-
-model Stock {
-  id        String   @id @default(cuid())
-  skuId     String
-  quantity  Int      @default(0)
-  updatedAt DateTime @default(now()) @updatedAt
-
-  sku Sku @relation(fields: [skuId], references: [id], onDelete: Cascade)
-
-  @@unique([skuId])
-  @@index([skuId])
-  @@map("stocks")
-}
-
-model Supply {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  status    String
-  updatedAt DateTime @updatedAt
-
-  items SupplyItem[]
-
-  @@index([status])
-  @@map("supplies")
-}
-
-model SupplyItem {
-  id       String @id @default(cuid())
-  supplyId String
-  skuId    String
-  quantity Int
-
-  supply Supply @relation(fields: [supplyId], references: [id], onDelete: Cascade)
-  sku    Sku    @relation(fields: [skuId], references: [id])
-
-  @@index([supplyId])
-  @@index([skuId])
-  @@map("supply_items")
-}
-
-// ============================================
-// 4. BCM (Brand & Catalog Management)
-// ============================================
-
-model ProductCard {
-  id          String   @id @default(cuid())
-  productId   String   @unique
-  title       String?
-  description String?
-  attributes  Json?
-  images      Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([productId])
-  @@map("product_cards")
-}
-
-// ============================================
-// 5. Finance
-// ============================================
-
-model FinanceReport {
-  id         String   @id @default(cuid())
-  skuId      String
-  date       DateTime
-  quantity   Int
-  revenue    Float
-  commission Float
-  refunds    Float    @default(0)
-  createdAt  DateTime @default(now())
-
-  sku Sku @relation(fields: [skuId], references: [id], onDelete: Cascade)
-
-  @@index([date])
-  @@index([skuId])
-  @@index([skuId, date])
-  @@map("finance_reports")
-}
-
-// ============================================
-// 6. Advertising
-// ============================================
-
-model AdCampaign {
-  id            String   @id @default(cuid())
-  marketplaceId String
-  name          String
-  status        String
-  budget        Float?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
-  stats       AdStats[]
-
-  @@index([marketplaceId])
-  @@index([status])
-  @@map("ad_campaigns")
-}
-
-model AdStats {
-  id          String   @id @default(cuid())
-  campaignId  String
-  date        DateTime
-  impressions Int?
-  clicks      Int?
-  spend       Float?
-  orders      Int?
-  revenue     Float?
-  createdAt   DateTime @default(now())
-
-  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-
-  @@index([campaignId])
-  @@index([date])
-  @@index([campaignId, date])
-  @@map("ad_stats")
-}
-
-// ============================================
-// 7. Support
-// ============================================
-
-model Review {
-  id        String   @id @default(cuid())
-  skuId     String?
-  rating    Int
-  text      String?
-  date      DateTime
-  createdAt DateTime @default(now())
-
-  sku Sku? @relation(fields: [skuId], references: [id], onDelete: SetNull)
-
-  @@index([skuId])
-  @@index([date])
-  @@index([rating])
-  @@map("reviews")
-}
-
-model SupportTicket {
-  id        String   @id @default(cuid())
-  text      String
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([status])
-  @@index([createdAt])
-  @@map("support_tickets")
-}
-
-// ============================================
-// 8. Agents
-// ============================================
-
-model AgentScenario {
-  id        String   @id @default(cuid())
-  key       String   @unique
+model CashflowCategory {
+  id        String              @id @default(uuid())
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  code      String              @unique
   name      String
-  endpoint  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  parentId  String?
+  isActive  Boolean             @default(true)
+  isTransfer Boolean            @default(false)
+  parent    CashflowCategory?   @relation("cashflow_categories_parent", fields: [parentId], references: [id], onDelete: SetNull)
+  children  CashflowCategory[]  @relation("cashflow_categories_parent")
+  FinancialDocument FinancialDocument[]
+  PaymentRequest    PaymentRequest[]
+  StatementLine     StatementLine[]       @relation("StatementLineToCashflowCategory")
+  MoneyTransaction  MoneyTransaction[]
+  FinanceCategoryDefaultMapping FinanceCategoryDefaultMapping[] @relation("FinanceCategoryDefaultMappingToCashflowCategory")
+  RecurringJournal  RecurringJournal[]
 
-  runs AgentRun[]
-
-  @@index([key])
-  @@map("agent_scenarios")
+  @@index([isActive])
+  @@index([isTransfer])
+  @@index([parentId])
+  @@map("cashflow_categories")
 }
 
-model AgentRun {
-  id         String    @id @default(cuid())
-  scenarioId String?
-  agentKey   String
-  input      Json
-  output     Json?
-  status     String
-  error      String?
-  startedAt  DateTime  @default(now())
-  finishedAt DateTime?
-
-  scenario AgentScenario?   @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
-  logs     IntegrationLog[]
-
-  @@index([agentKey])
-  @@index([status])
-  @@index([scenarioId])
-  @@index([startedAt])
-  @@map("agent_runs")
+enum PaymentRequestType {
+  SUPPLY
+  PRODUCTION
+  SERVICE
+  RENT
+  MARKETING
+  SALARY
+  TAX
+  LOAN
+  DIVIDEND
+  TRANSFER
+  OTHER
 }
 
-// ============================================
-// 9. Settings
-// ============================================
+enum PaymentRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PARTIALLY_PAID
+  PAID
+  REJECTED
+  CANCELED
+}
+
+enum PaymentPlanStatus {
+  PLANNED
+  MOVED
+  CANCELED
+  EXECUTED
+}
+
+model FinanceApprovalPolicy {
+  id            String             @id @default(uuid())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  legalEntityId String
+  type          PaymentRequestType?
+  amountBaseFrom Decimal           @db.Decimal(18, 2)
+  amountBaseTo   Decimal?          @db.Decimal(18, 2)
+  approverRole   String?
+  approverUserId String?
+  isAutoApprove  Boolean           @default(false)
+
+  legalEntity    LegalEntity       @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  approverUser   User?             @relation("finance_approval_policies_approver", fields: [approverUserId], references: [id])
+
+  @@index([legalEntityId, type])
+  @@index([legalEntityId, amountBaseFrom])
+  @@map("finance_approval_policies")
+}
+
+enum FinanceCategoryMappingSourceType {
+  FINANCIAL_DOCUMENT_TYPE
+  PAYMENT_REQUEST_TYPE
+  STATEMENT_OPERATION_HINT
+  MONEY_TRANSACTION_SOURCE_TYPE
+}
+
+model FinanceCategoryDefaultMapping {
+  id                      String                         @id @default(uuid())
+  createdAt               DateTime                       @default(now())
+  updatedAt               DateTime                       @updatedAt
+  legalEntityId           String?
+  sourceType              FinanceCategoryMappingSourceType
+  sourceCode              String
+  defaultCashflowCategoryId String?
+  defaultPnlCategoryId    String?
+  priority                Int                            @default(100)
+  isActive                Boolean                        @default(true)
+
+  legalEntity             LegalEntity?                   @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  defaultCashflowCategory CashflowCategory?              @relation("FinanceCategoryDefaultMappingToCashflowCategory", fields: [defaultCashflowCategoryId], references: [id], onDelete: SetNull)
+  defaultPnlCategory      PnlCategory?                   @relation("FinanceCategoryDefaultMappingToPnlCategory", fields: [defaultPnlCategoryId], references: [id], onDelete: SetNull)
+
+  @@unique([legalEntityId, sourceType, sourceCode])
+  @@index([legalEntityId, sourceType, isActive, priority])
+  @@map("finance_category_default_mappings")
+}
+
+model PaymentRequest {
+  id                 String              @id @default(uuid())
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  legalEntityId      String
+  type               PaymentRequestType
+  status             PaymentRequestStatus @default(DRAFT)
+  amount             Decimal             @db.Decimal(18, 2)
+  currency           String
+  amountBase         Decimal             @db.Decimal(18, 2)
+  plannedPayDate     DateTime
+  priority           Int                 @default(1)
+  counterpartyId     String?
+  financialDocumentId String?
+  linkedDocType      FinanceLinkedDocType?
+  linkedDocId        String?
+  cashflowCategoryId String
+  pnlCategoryId      String?
+  description        String?
+  attachments        Json?
+  requestedByUserId  String?
+
+  submittedAt        DateTime?
+  submittedBy        String?
+  approvedAt         DateTime?
+  approvedBy         String?
+  rejectedAt         DateTime?
+  rejectedBy         String?
+  rejectReason       String?
+
+  legalEntity        LegalEntity         @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  counterparty       Counterparty?       @relation(fields: [counterpartyId], references: [id])
+  financialDocument  FinancialDocument?  @relation(fields: [financialDocumentId], references: [id])
+  cashflowCategory   CashflowCategory    @relation(fields: [cashflowCategoryId], references: [id])
+  pnlCategory        PnlCategory?        @relation(fields: [pnlCategoryId], references: [id])
+  requestedByUser    User?               @relation("payment_requests_requested_by", fields: [requestedByUserId], references: [id])
+  PaymentPlan        PaymentPlan[]
+
+  @@index([legalEntityId, status, plannedPayDate])
+  @@index([financialDocumentId])
+  @@index([linkedDocType, linkedDocId])
+  @@map("payment_requests")
+}
+
+enum FinancialAccountType {
+  CASHBOX
+  BANK_ACCOUNT
+  ACQUIRING_ACCOUNT
+  MARKETPLACE_WALLET
+  OTHER_CLEARING
+}
+
+enum FinancialAccountStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model FinancialAccount {
+  id           String                 @id @default(uuid())
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  legalEntityId String
+  type         FinancialAccountType
+  currency     String
+  name         String
+  provider     String?
+  externalRef  String?
+  status       FinancialAccountStatus @default(ACTIVE)
+
+  legalEntity  LegalEntity            @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  MoneyTransaction MoneyTransaction[]
+  PaymentPlan  PaymentPlan[]
+  PaymentExecution PaymentExecution[]
+  Statement        Statement[]
+  StatementLine    StatementLine[]
+  CashTransferFrom CashTransfer[]        @relation("CashTransferFromAccount")
+  CashTransferTo   CashTransfer[]        @relation("CashTransferToAccount")
+
+  @@index([legalEntityId, type])
+  @@index([legalEntityId, currency])
+  @@map("financial_accounts")
+}
+
+model PaymentPlan {
+  id                String            @id @default(uuid())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  paymentRequestId  String
+  legalEntityId     String
+  fromAccountId     String?
+  plannedDate       DateTime
+  plannedAmount     Decimal           @db.Decimal(18, 2)
+  currency          String
+  plannedAmountBase Decimal           @db.Decimal(18, 2)
+  status            PaymentPlanStatus @default(PLANNED)
+  note              String?
+  movedFromPlanId   String?
+  PaymentExecution  PaymentExecution?
+
+  paymentRequest    PaymentRequest    @relation(fields: [paymentRequestId], references: [id], onDelete: Cascade)
+  legalEntity       LegalEntity       @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  fromAccount       FinancialAccount? @relation(fields: [fromAccountId], references: [id], onDelete: SetNull)
+
+  @@index([legalEntityId, plannedDate])
+  @@index([paymentRequestId])
+  @@index([fromAccountId, plannedDate])
+  @@map("payment_plans")
+}
+
+enum PaymentExecutionStatus {
+  EXECUTED
+  CANCELED
+  REVERSED
+}
+
+model PaymentExecution {
+  id            String                 @id @default(uuid())
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  paymentPlanId String                 @unique
+  legalEntityId String
+  fromAccountId String
+  executedAt    DateTime
+  amount        Decimal                @db.Decimal(18, 2)
+  currency      String
+  amountBase    Decimal                @db.Decimal(18, 2)
+  bankReference String?
+  description   String?
+  status        PaymentExecutionStatus @default(EXECUTED)
+
+  paymentPlan   PaymentPlan            @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+  legalEntity   LegalEntity            @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  fromAccount   FinancialAccount       @relation(fields: [fromAccountId], references: [id], onDelete: Restrict)
+
+  @@index([legalEntityId, executedAt])
+  @@index([fromAccountId, executedAt])
+  @@map("payment_executions")
+}
+
+enum StatementProvider {
+  BANK
+  ACQUIRING
+  MARKETPLACE
+  OTHER
+}
+
+enum StatementStatus {
+  IMPORTED
+  ARCHIVED
+}
+
+enum StatementLineStatus {
+  NEW
+  SUGGESTED
+  MATCHED
+  POSTED
+  SPLIT
+  IGNORED
+  ERROR
+}
+
+enum StatementLinePostedMode {
+  FEE_LINK_ONLY
+  FEE_ENTRY_CREATED
+}
+
+model Statement {
+  id         String          @id @default(uuid())
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  legalEntityId String
+  accountId  String
+  provider   StatementProvider
+  sourceName String?
+  periodFrom DateTime?
+  periodTo   DateTime?
+  importedAt DateTime        @default(now())
+  importHash String
+  status     StatementStatus @default(IMPORTED)
+  raw        Json?
+
+  legalEntity LegalEntity    @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  account     FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  lines       StatementLine[]
+
+  @@unique([accountId, importHash])
+  @@index([legalEntityId, accountId, importedAt])
+  @@map("statements")
+}
+
+model StatementLine {
+  id                 String               @id @default(uuid())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  statementId        String
+  accountId          String
+  legalEntityId      String
+  lineIndex          Int
+  occurredAt         DateTime
+  direction          MoneyTransactionDirection
+  amount             Decimal              @db.Decimal(18, 2)
+  currency           String
+  amountBase         Decimal              @db.Decimal(18, 2)
+  description        String?
+  counterpartyName   String?
+  counterpartyInn    String?
+  bankReference      String?
+  externalLineId     String?
+  lineHash           String
+  status             StatementLineStatus  @default(NEW)
+  errorMessage       String?
+  ignoredAt          DateTime?
+  ignoredReason      String?
+  suggestedMatch     Json?
+  matchedEntityType  String?
+  matchedEntityId    String?
+  postedMoneyTransactionId String?
+  postedAt           DateTime?
+  postedMode         StatementLinePostedMode?
+  parentLineId       String?
+  isSplitParent      Boolean              @default(false)
+  // TZ 5.2: marketplace fee normalization (anti-double-count policy)
+  operationTypeHint      String?
+  externalOperationCode  String?
+  marketplaceOrderId     String?
+  saleDocumentId         String?
+  feeKey                String?
+  cashflowCategoryId     String?
+  feeVoidedAt            DateTime?
+  feeVoidReason          String?
+
+  statement          Statement            @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  legalEntity        LegalEntity          @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  account            FinancialAccount     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  saleDocument       SalesDocument?       @relation("StatementLineToSalesDocument", fields: [saleDocumentId], references: [id], onDelete: SetNull)
+  cashflowCategory   CashflowCategory?    @relation("StatementLineToCashflowCategory", fields: [cashflowCategoryId], references: [id], onDelete: SetNull)
+  parent             StatementLine?       @relation("StatementLineSplit", fields: [parentLineId], references: [id], onDelete: Cascade)
+  children           StatementLine[]      @relation("StatementLineSplit")
+  walletCashTransfers CashTransfer[]      @relation("CashTransferWalletLine")
+  bankCashTransfers   CashTransfer[]      @relation("CashTransferBankLine")
+  AcquiringEvent      AcquiringEvent[]    @relation("AcquiringEventToStatementLine")
+
+  @@unique([statementId, lineIndex])
+  @@unique([accountId, lineHash])
+  @@unique([accountId, externalLineId])
+  @@index([accountId, occurredAt])
+  @@index([legalEntityId, status, occurredAt])
+  @@index([matchedEntityType, matchedEntityId])
+  @@index([parentLineId])
+  @@index([operationTypeHint, occurredAt])
+  @@index([postedMode])
+  @@index([marketplaceOrderId])
+  @@index([saleDocumentId])
+  @@index([externalOperationCode])
+  @@map("statement_lines")
+}
+
+enum MoneyTransactionSourceType {
+  STATEMENT_LINE
+  PAYMENT_EXECUTION
+  INTERNAL_TRANSFER
+  MANUAL
+}
+
+enum MoneyTransactionDirection {
+  IN
+  OUT
+}
+
+enum MoneyTransactionStatus {
+  POSTED
+  VOIDED
+}
+
+model MoneyTransaction {
+  id             String                   @id @default(uuid())
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  accountId      String
+  occurredAt     DateTime
+  direction      MoneyTransactionDirection
+  amount         Decimal                  @db.Decimal(14, 4)
+  currency       String
+  amountBase     Decimal                  @db.Decimal(14, 4)
+  description    String?
+  counterpartyId String?
+  sourceType     MoneyTransactionSourceType
+  sourceId       String?
+  cashflowCategoryId String?
+  idempotencyKey String
+  status         MoneyTransactionStatus   @default(POSTED)
+  voidedAt       DateTime?
+  voidReason     String?
+
+  account        FinancialAccount         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  counterparty   Counterparty?            @relation("money_transactions_counterparty", fields: [counterpartyId], references: [id])
+  cashflowCategory CashflowCategory?      @relation(fields: [cashflowCategoryId], references: [id], onDelete: SetNull)
+  CashAccountingLink CashAccountingLink[]
+
+  @@unique([accountId, idempotencyKey])
+  @@index([accountId, occurredAt])
+  @@index([cashflowCategoryId])
+  @@index([sourceType, sourceId])
+  @@map("money_transactions")
+}
+
+model IntegrationLog {
+  id                     String                  @id @default(uuid())
+  createdAt              DateTime                @default(now())
+  level                  LogLevel
+  source                 LogSource
+  message                String
+  integrationId          String?
+  agentRunId             String?
+  details                Json?
+  AgentRun               AgentRun?               @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  MarketplaceIntegration MarketplaceIntegration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@index([integrationId])
+  @@map("integration_logs")
+}
 
 model Integration {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   key       String   @unique
   name      String
   config    Json?
@@ -500,48 +1018,1298 @@ model Integration {
   @@map("integrations")
 }
 
+model InventoryAccountingLink {
+  id                String          @id @default(uuid())
+  createdAt         DateTime        @default(now())
+  stockMovementId   String
+  accountingEntryId String
+  role              String?
+  AccountingEntry   AccountingEntry @relation(fields: [accountingEntryId], references: [id], onDelete: Cascade)
+  StockMovement     StockMovement   @relation(fields: [stockMovementId], references: [id], onDelete: Cascade)
+
+  @@unique([stockMovementId, accountingEntryId])
+  @@index([accountingEntryId])
+  @@index([stockMovementId])
+  @@map("inventory_accounting_links")
+}
+
+model InventoryAdjustment {
+  id          String                    @id @default(uuid())
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime @updatedAt
+  status      InventoryAdjustmentStatus @default(POSTED)
+  warehouseId String
+  itemId      String
+  quantity    Decimal                   @db.Decimal(14, 4)
+  unitCost    Decimal?                  @db.Decimal(18, 4)
+  currency    String?                   @default("RUB")
+  reason      String?
+  meta        Json?
+  MdmItem     MdmItem                   @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse                 @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([status])
+  @@index([warehouseId])
+  @@map("inventory_adjustments")
+}
+
+model InventoryBalance {
+  id          String    @id @default(uuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  warehouseId String
+  quantity    Decimal   @default(0) @db.Decimal(14, 4)
+  itemId      String
+  MdmItem     MdmItem   @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, itemId])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@map("inventory_balances")
+}
+
+model InventoryTransaction {
+  id                                                                             String             @id @default(uuid())
+  createdAt                                                                      DateTime           @default(now())
+  warehouseId                                                                    String
+  supplyId                                                                       String?
+  supplyItemId                                                                   String?
+  direction                                                                      InventoryDirection
+  quantity                                                                       Decimal            @db.Decimal(14, 4)
+  comment                                                                        String?
+  voidedAt                                                                       DateTime?
+  voidReason                                                                     String?
+  docId                                                                          String?
+  docType                                                                        String?
+  itemId                                                                         String
+  stockMovementId                                                                String?
+  updatedAt                                                                      DateTime           @updatedAt
+  MdmItem                                                                        MdmItem            @relation(fields: [itemId], references: [id])
+  stock_movements_inventory_transactions_stockMovementIdTostock_movements        StockMovement?     @relation("inventory_transactions_stockMovementIdTostock_movements", fields: [stockMovementId], references: [id])
+  ScmSupply                                                                      ScmSupply?         @relation(fields: [supplyId], references: [id])
+  ScmSupplyItem                                                                  ScmSupplyItem?     @relation(fields: [supplyItemId], references: [id])
+  warehouse                                                                      Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions StockMovement[]    @relation("stock_movements_inventoryTransactionIdToinventory_transactions")
+
+  @@index([docType, docId])
+  @@index([itemId])
+  @@index([supplyId])
+  @@index([supplyItemId])
+  @@index([warehouseId])
+  @@map("inventory_transactions")
+}
+
+model LegalEntity {
+  id                 String            @id @default(uuid())
+  name               String
+  kpp                String?
+  director           String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime @updatedAt
+  code               String            @unique
+  status             LegalEntityStatus @default(ACTIVE)
+  countryCode        String
+  taxId              String?
+  registrationNumber String?
+  legalAddress       String?
+  bankDetails        Json?
+  comment            String?
+  AccountingEntry    AccountingEntry[]
+  FinancialDocument  FinancialDocument[]
+  FinancialAccount   FinancialAccount[]
+  PaymentRequest     PaymentRequest[]
+  FinanceApprovalPolicy FinanceApprovalPolicy[]
+  PaymentPlan        PaymentPlan[]
+  PaymentExecution   PaymentExecution[]
+  Statement          Statement[]
+  StatementLine      StatementLine[]
+  CashTransfer       CashTransfer[]
+  AcquiringEvent     AcquiringEvent[]
+  FinanceCategoryDefaultMapping FinanceCategoryDefaultMapping[]
+  RecurringJournal   RecurringJournal[]
+  AccountingPostingRun AccountingPostingRun[]
+  CounterpartyOffer  CounterpartyOffer[]
+  BrandCountry       BrandCountry[]
+  Country            Country           @relation(fields: [countryCode], references: [code])
+
+  @@map("legal_entities")
+}
+
+model MarketplaceCountry {
+  marketplaceId String
+  countryId     String
+  Country       Country     @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  Marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@id([marketplaceId, countryId])
+  @@index([countryId])
+  @@index([marketplaceId])
+  @@map("marketplace_countries")
+}
+
+model MarketplaceIntegration {
+  id                   String            @id @default(uuid())
+  name                 String
+  marketplaceId        String
+  brandId              String
+  countryId            String
+  status               IntegrationStatus @default(ACTIVE)
+  lastSyncAt           DateTime?
+  ozonSellerClientId   String?
+  ozonSellerToken      String?
+  ozonPerfClientId     String?
+  ozonPerfClientSecret String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime @updatedAt
+  IntegrationLog       IntegrationLog[]
+  Brand                Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  Country              Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  Marketplace          Marketplace       @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@unique([marketplaceId, brandId, countryId])
+  @@index([brandId])
+  @@index([countryId])
+  @@index([marketplaceId])
+  @@index([status])
+  @@map("marketplace_integrations")
+}
+
+model Marketplace {
+  id                     String                   @id @default(uuid())
+  name                   String
+  code                   String                   @unique
+  logoUrl                String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime @updatedAt
+  AccountingEntry        AccountingEntry[]
+  AdCampaign             AdCampaign[]
+  BcmListingProfile      BcmListingProfile[]
+  MarketplaceCountry     MarketplaceCountry[]
+  MarketplaceIntegration MarketplaceIntegration[]
+  SalesDocument          SalesDocument[]
+
+  @@map("marketplaces")
+}
+
+model MdmItem {
+  id                     String                   @id @default(uuid())
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime @updatedAt
+  type                   MdmItemType
+  code                   String
+  name                   String
+  unit                   String?
+  isActive               Boolean                  @default(true)
+  BcmListingProfile      BcmListingProfile[]
+  BcmProductProfile      BcmProductProfile[]
+  CounterpartyOffer      CounterpartyOffer[]
+  InventoryAdjustment    InventoryAdjustment[]
+  InventoryBalance       InventoryBalance[]
+  InventoryTransaction   InventoryTransaction[]
+  OverheadAllocationRule OverheadAllocationRule[]
+  ProductionOrderItem    ProductionOrderItem[]
+  SalesDocumentLine      SalesDocumentLine[]
+  ScmBomItem             ScmBomItem[]
+  ScmProduct             ScmProduct?
+  ScmStock               ScmStock[]
+  ScmSupplyItem          ScmSupplyItem[]
+  ScmTransferItem        ScmTransferItem[]
+  SpecProfile            SpecProfile[]
+  StockBatche            StockBatch[]
+  StockMovement          StockMovement[]
+  StockReservation       StockReservation[]
+  SupplierItem           SupplierItem?
+
+  @@unique([type, code])
+  @@index([code])
+  @@index([type])
+  @@map("mdm_items")
+}
+
+model OsDomainAction {
+  id                  String         @id @default(uuid())
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime @updatedAt
+  objectId            String
+  code                String
+  handlerName         String
+  actionType          String
+  name                String
+  description         String?
+  httpMethod          String?
+  httpPath            String?
+  isPostingAction     Boolean        @default(false)
+  allowedFromStatuses String?
+  targetStatus        String?
+  isBulk              Boolean        @default(false)
+  enabledForAgents    Boolean        @default(true)
+  requiredRole        String?
+  requestSchema       Json?
+  responseSchema      Json?
+  allowWhenNoStatus   Boolean        @default(false)
+  OsDomainObject      OsDomainObject @relation(fields: [objectId], references: [id], onDelete: Cascade)
+
+  @@unique([objectId, code])
+  @@index([actionType])
+  @@map("os_domain_actions")
+}
+
+model OsDomainObject {
+  id                 String           @id @default(uuid())
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime @updatedAt
+  code               String           @unique
+  name               String
+  domain             String
+  entityName         String?
+  serviceKey         String?
+  apiBasePath        String?
+  primaryKey         String           @default("id")
+  idPayloadKey       String?          @default("id")
+  description        String?
+  isActive           Boolean          @default(true)
+  isInternal         Boolean          @default(false)
+  statusEntityName   String?
+  statusFieldName    String?
+  statusesDefinition Json?
+  OsDomainAction     OsDomainAction[]
+  OsLifecycle        OsLifecycle[]
+
+  @@index([domain])
+  @@map("os_domain_objects")
+}
+
+model OsEvent {
+  id            String        @id @default(uuid())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  type          String
+  version       Int           @default(1)
+  status        OsEventStatus @default(PENDING)
+  aggregateType String?
+  aggregateId   String?
+  payload       Json
+  source        String?
+
+  @@index([aggregateType, aggregateId])
+  @@index([status, createdAt])
+  @@map("os_events")
+}
+
+model OsLifecycle {
+  id             String         @id @default(uuid())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime @updatedAt
+  objectId       String
+  code           String         @default("DEFAULT")
+  definition     Json
+  OsDomainObject OsDomainObject @relation(fields: [objectId], references: [id], onDelete: Cascade)
+
+  @@index([objectId, code])
+  @@map("os_lifecycles")
+}
+
+model OverheadAllocationRule {
+  id          String                   @id @default(uuid())
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String
+  description String?
+  method      OverheadAllocationMethod
+  rate        Decimal                  @db.Decimal(18, 4)
+  currency    String?
+  scope       OverheadScope
+  brandId     String?
+  countryId   String?
+  itemId      String?
+  categoryId  String?
+  isActive    Boolean                  @default(true)
+  MdmItem     MdmItem?                 @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([isActive])
+  @@index([scope])
+  @@map("overhead_allocation_rules")
+}
+
+model ProductionBatche {
+  id                String          @id @default(uuid())
+  createdAt         DateTime        @default(now())
+  productionOrderId String
+  productId         String
+  batchCode         String
+  expirationDate    DateTime?
+  totalQty          Decimal         @db.Decimal(14, 4)
+  ScmProduct        ScmProduct      @relation(fields: [productId], references: [id])
+  ProductionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  StockMovement     StockMovement[]
+
+  @@index([productId])
+  @@index([productionOrderId])
+  @@map("production_batches")
+}
+
+model ProductionConsumptionOperation {
+  id                    String              @id @default(uuid())
+  createdAt             DateTime            @default(now())
+  productionOrderId     String
+  productionOrderItemId String
+  quantity              Decimal             @db.Decimal(14, 4)
+  responsibleUserId     String?
+  note                  String?
+  ProductionOrder       ProductionOrder     @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  ProductionOrderItem   ProductionOrderItem @relation(fields: [productionOrderItemId], references: [id], onDelete: Cascade)
+  StockMovement         StockMovement[]
+
+  @@index([productionOrderId])
+  @@index([productionOrderItemId])
+  @@map("production_consumption_operations")
+}
+
+model ProductionOrderItem {
+  id                                                              String                           @id @default(uuid())
+  createdAt                                                       DateTime                         @default(now())
+  updatedAt                                                       DateTime                         @updatedAt
+  productionOrderId                                               String
+  quantityPlanned                                                 Decimal                          @db.Decimal(14, 4)
+  quantityUnit                                                    String
+  quantityReceived                                                Decimal?                         @db.Decimal(14, 4)
+  status                                                          ProductionOrderItemStatus        @default(PLANNED)
+  expectedDate                                                    DateTime?
+  receivedDate                                                    DateTime?
+  fromBom                                                         Boolean                          @default(true)
+  note                                                            String?
+  currency                                                        String                           @default("RUB")
+  hasMissingCost                                                  Boolean                          @default(false)
+  plannedTotalCost                                                Decimal                          @default(0) @db.Decimal(14, 2)
+  plannedUnitCost                                                 Decimal                          @default(0) @db.Decimal(14, 4)
+  plannedSupplyId                                                 String?
+  plannedTransferId                                               String?
+  sourceType                                                      ScmComponentSourceType           @default(OWN_STOCK)
+  sourceWarehouseId                                               String?
+  targetWarehouseId                                               String?
+  provisionStatus                                                 ScmComponentProvisionStatus      @default(NOT_PLANNED)
+  provisionedQty                                                  Decimal                          @default(0) @db.Decimal(14, 4)
+  provisionedAt                                                   DateTime?
+  provisionedWarehouseId                                          String?
+  provisionMeta                                                   Json?
+  consumedQty                                                     Decimal                          @default(0) @db.Decimal(14, 4)
+  isConsumed                                                      Boolean                          @default(false)
+  consumptionStatus                                               ProductionConsumptionStatus      @default(NOT_CONSUMED)
+  itemId                                                          String
+  ProductionConsumptionOperation                                  ProductionConsumptionOperation[]
+  item                                                            MdmItem                          @relation(fields: [itemId], references: [id])
+  ScmSupply                                                       ScmSupply?                       @relation(fields: [plannedSupplyId], references: [id])
+  productionOrder                                                 ProductionOrder                  @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  warehouses_production_order_items_sourceWarehouseIdTowarehouses Warehouse?                       @relation("production_order_items_sourceWarehouseIdTowarehouses", fields: [sourceWarehouseId], references: [id])
+  warehouses_production_order_items_targetWarehouseIdTowarehouses Warehouse?                       @relation("production_order_items_targetWarehouseIdTowarehouses", fields: [targetWarehouseId], references: [id])
+  ScmSupplyItem                                                   ScmSupplyItem[]
+  StockBatche                                                     StockBatch[]
+  StockMovement                                                   StockMovement[]
+
+  @@index([itemId])
+  @@index([productionOrderId])
+  @@index([productionOrderId, provisionStatus])
+  @@index([status])
+  @@map("production_order_items")
+}
+
+model ProductionOrder {
+  id                                                         String                           @id @default(uuid())
+  createdAt                                                  DateTime                         @default(now())
+  updatedAt                                                  DateTime @updatedAt
+  code                                                       String                           @unique
+  name                                                       String
+  productId                                                  String
+  quantityPlanned                                            Decimal                          @db.Decimal(14, 4)
+  unit                                                       String
+  status                                                     ProductionOrderStatus            @default(PLANNED)
+  plannedStartAt                                             DateTime?
+  plannedEndAt                                               DateTime?
+  actualStartAt                                              DateTime?
+  actualEndAt                                                DateTime?
+  productionSite                                             String?
+  notes                                                      String?
+  productionCountryId                                        String?
+  manufacturerId                                             String?
+  warehouseId                                                String?
+  currency                                                   String                           @default("RUB")
+  materialsCostTotal                                         Decimal                          @default(0) @db.Decimal(14, 4)
+  otherCostTotal                                             Decimal                          @default(0) @db.Decimal(14, 4)
+  producedItemId                                             String?
+  producedQty                                                Decimal?                         @db.Decimal(14, 4)
+  servicesCostTotal                                          Decimal                          @default(0) @db.Decimal(14, 4)
+  totalCost                                                  Decimal                          @default(0) @db.Decimal(14, 4)
+  unitCost                                                   Decimal                          @default(0) @db.Decimal(14, 4)
+  outputWarehouseId                                          String?
+  totalMaterialCost                                          Decimal                          @default(0) @db.Decimal(14, 4)
+  totalServiceCost                                           Decimal                          @default(0) @db.Decimal(14, 4)
+  overheadCost                                               Decimal                          @default(0) @db.Decimal(14, 4)
+  totalCostBase                                              Decimal?                         @db.Decimal(14, 4)
+  unitCostBase                                               Decimal?                         @db.Decimal(14, 6)
+  completionVoidedAt                                         DateTime?
+  completionVoidReason                                       String?
+  FinancialDocument                                          FinancialDocument[]
+  ProductionBatche                                           ProductionBatche[]
+  ProductionConsumptionOperation                             ProductionConsumptionOperation[]
+  ProductionOrderItem                                        ProductionOrderItem[]
+  manufacturer                                               Counterparty?                   @relation(fields: [manufacturerId], references: [id])
+  warehouses_production_orders_outputWarehouseIdTowarehouses Warehouse?                       @relation("production_orders_outputWarehouseIdTowarehouses", fields: [outputWarehouseId], references: [id])
+  ScmProduct                                                 ScmProduct                       @relation(fields: [productId], references: [id])
+  Country                                                    Country?                         @relation(fields: [productionCountryId], references: [id])
+  warehouses_production_orders_warehouseIdTowarehouses       Warehouse?                       @relation("production_orders_warehouseIdTowarehouses", fields: [warehouseId], references: [id])
+  ScmServiceOperation                                        ScmServiceOperation[]
+  ScmSupply                                                  ScmSupply[]
+  StockReservation                                           StockReservation[]
+
+  @@index([code])
+  @@index([outputWarehouseId])
+  @@index([productId])
+  @@index([status])
+  @@map("production_orders")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int
+  text      String?
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([rating])
+  @@map("reviews")
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User[]
+
+  @@map("roles")
+}
+
+model SalesDocumentLine {
+  id              String        @id @default(uuid())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime @updatedAt
+  salesDocumentId String
+  warehouseId     String?
+  itemId          String
+  date            DateTime
+  quantity        Decimal       @db.Decimal(14, 4)
+  revenue         Decimal       @db.Decimal(18, 2)
+  commission      Decimal       @db.Decimal(18, 2)
+  refunds         Decimal       @default(0) @db.Decimal(18, 2)
+  cogsAmount      Decimal       @default(0) @db.Decimal(18, 2)
+  meta            Json?
+  MdmItem         MdmItem       @relation(fields: [itemId], references: [id])
+  SalesDocument   SalesDocument @relation(fields: [salesDocumentId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse?    @relation(fields: [warehouseId], references: [id])
+
+  @@index([date])
+  @@index([itemId])
+  @@index([salesDocumentId])
+  @@index([warehouseId])
+  @@map("sales_document_lines")
+}
+
+model SalesDocument {
+  id                  String              @id @default(uuid())
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime @updatedAt
+  countryId           String?
+  brandId             String?
+  marketplaceId       String?
+  warehouseId         String?
+  sourceType          String
+  sourceFileId        String?
+  externalId          String?
+  periodFrom          DateTime
+  periodTo            DateTime
+  status              SalesDocumentStatus @default(DRAFT)
+  totalRevenue        Decimal             @default(0) @db.Decimal(18, 2)
+  totalCommission     Decimal             @default(0) @db.Decimal(18, 2)
+  totalRefunds        Decimal             @default(0) @db.Decimal(18, 2)
+  totalQty            Decimal             @default(0) @db.Decimal(14, 4)
+  totalCogs           Decimal             @default(0) @db.Decimal(18, 2)
+  financialDocumentId String?
+  SalesDocumentLine   SalesDocumentLine[]
+  StatementLine       StatementLine[]     @relation("StatementLineToSalesDocument")
+  Brand               Brand?              @relation(fields: [brandId], references: [id])
+  Country             Country?            @relation(fields: [countryId], references: [id])
+  FinancialDocument   FinancialDocument?  @relation(fields: [financialDocumentId], references: [id])
+  Marketplace         Marketplace?        @relation(fields: [marketplaceId], references: [id])
+  warehouse           Warehouse?          @relation(fields: [warehouseId], references: [id])
+
+  @@index([brandId])
+  @@index([financialDocumentId])
+  @@index([marketplaceId])
+  @@index([periodFrom])
+  @@index([periodTo])
+  @@index([status])
+  @@index([warehouseId])
+  @@map("sales_documents")
+}
+
+model ScmBomItem {
+  id             String     @id @default(uuid())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime @updatedAt
+  productId      String
+  quantity       Decimal    @db.Decimal(14, 4)
+  unit           String
+  wastagePercent Decimal?   @db.Decimal(5, 2)
+  isOptional     Boolean    @default(false)
+  note           String?
+  itemId         String
+  MdmItem        MdmItem    @relation(fields: [itemId], references: [id])
+  ScmProduct     ScmProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([productId])
+  @@map("scm_bom_items")
+}
+
+model ScmProductSupplier {
+  id               String       @id @default(uuid())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime @updatedAt
+  scmProductId     String
+  supplierCounterpartyId String
+  role             SupplierRole
+  isPrimary        Boolean      @default(false)
+  leadTimeDays     Int?
+  minOrderQty      Int?
+  purchaseCurrency String?
+  purchasePrice    Decimal?     @db.Decimal(14, 4)
+  notes            String?
+  ScmProduct       ScmProduct   @relation(fields: [scmProductId], references: [id], onDelete: Cascade)
+  supplierCounterparty Counterparty @relation(fields: [supplierCounterpartyId], references: [id], onDelete: Cascade)
+
+  @@unique([scmProductId, supplierCounterpartyId, role])
+  @@index([scmProductId])
+  @@index([supplierCounterpartyId])
+  @@map("scm_product_suppliers")
+}
+
+model ScmProduct {
+  id                 String               @id @default(uuid())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime @updatedAt
+  internalName       String
+  sku                String?
+  brandId            String?
+  baseDescription    String?
+  composition        String?
+  type               ScmProductType       @default(PURCHASED)
+  itemId             String?              @unique
+  ProductionBatche   ProductionBatche[]
+  ProductionOrder    ProductionOrder[]
+  ScmBomItem         ScmBomItem[]
+  ScmProductSupplier ScmProductSupplier[]
+  Brand              Brand?               @relation(fields: [brandId], references: [id])
+  MdmItem            MdmItem?             @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([brandId])
+  @@index([sku])
+  @@index([type])
+  @@map("scm_products")
+}
+
+model ScmServiceOperation {
+  id                  String             @id @default(uuid())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime @updatedAt
+  supplierCounterpartyId String?
+  category            ScmServiceCategory
+  name                String
+  productionOrderId   String?
+  supplyId            String?
+  quantity            Decimal?           @db.Decimal(14, 4)
+  unit                String?
+  pricePerUnit        Decimal?           @db.Decimal(14, 4)
+  totalAmount         Decimal            @db.Decimal(14, 4)
+  currency            String
+  financialDocumentId String?
+  comment             String?
+  supplierServiceId   String?
+  FinancialDocument   FinancialDocument? @relation(fields: [financialDocumentId], references: [id])
+  ProductionOrder     ProductionOrder?   @relation(fields: [productionOrderId], references: [id])
+  supplierCounterparty Counterparty?     @relation(fields: [supplierCounterpartyId], references: [id])
+  SupplierService     SupplierService?   @relation(fields: [supplierServiceId], references: [id])
+  ScmSupply           ScmSupply?         @relation(fields: [supplyId], references: [id])
+
+  @@index([category])
+  @@index([financialDocumentId])
+  @@index([productionOrderId])
+  @@index([supplierCounterpartyId])
+  @@index([supplierServiceId])
+  @@index([supplyId])
+  @@map("scm_service_operations")
+}
+
+model ScmStock {
+  id          String    @id @default(uuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  warehouseId String
+  quantity    Decimal   @db.Decimal(14, 4)
+  unit        String
+  itemId      String
+  MdmItem     MdmItem   @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, itemId])
+  @@index([itemId])
+  @@index([warehouseId])
+  @@map("scm_stocks")
+}
+
+model ScmSupply {
+  id                   String                 @id @default(uuid())
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  code                 String                 @unique
+  status               ScmSupplyStatus        @default(DRAFT)
+  supplierCounterpartyId String
+  brandId              String?
+  warehouseId          String
+  productionOrderId    String?
+  currency             String                 @default("RUB")
+  totalAmount          Decimal                @default(0) @db.Decimal(14, 4)
+  orderDate            DateTime?
+  expectedDate         DateTime?
+  receivedDate         DateTime?
+  comment              String?
+  FinancialDocument    FinancialDocument[]
+  InventoryTransaction InventoryTransaction[]
+  ProductionOrderItem  ProductionOrderItem[]
+  ScmServiceOperation  ScmServiceOperation[]
+  productionOrder      ProductionOrder?       @relation(fields: [productionOrderId], references: [id])
+  brand                Brand?                 @relation(fields: [brandId], references: [id])
+  supplierCounterparty Counterparty          @relation(fields: [supplierCounterpartyId], references: [id])
+  warehouse            Warehouse              @relation(fields: [warehouseId], references: [id])
+  items                ScmSupplyItem[]
+  scmSupplyReceipts    ScmSupplyReceipt[]
+
+  @@index([code])
+  @@index([brandId])
+  @@index([productionOrderId])
+  @@index([status])
+  @@index([supplierCounterpartyId])
+  @@index([warehouseId])
+  @@map("scm_supplies")
+}
+
+model ScmSupplyItem {
+  id                    String                 @id @default(uuid())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  supplyId              String
+  description           String?
+  unit                  String
+  quantityOrdered       Decimal                @default(0) @db.Decimal(14, 4)
+  quantityReceived      Decimal                @default(0) @db.Decimal(14, 4)
+  pricePerUnit          Decimal                @default(0) @db.Decimal(14, 4)
+  currency              String
+  productionOrderItemId String?
+  customsCost           Decimal?               @db.Decimal(18, 4)
+  inboundCost           Decimal?               @db.Decimal(18, 4)
+  logisticsCost         Decimal?               @db.Decimal(18, 4)
+  remainingQuantity     Decimal                @default(0) @db.Decimal(14, 4)
+  itemId                String
+  offerId               String?
+  InventoryTransaction  InventoryTransaction[]
+  item                  MdmItem                @relation(fields: [itemId], references: [id])
+  offer                 CounterpartyOffer?     @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  productionOrderItem   ProductionOrderItem?   @relation(fields: [productionOrderItemId], references: [id])
+  supply                ScmSupply              @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  receipts              ScmSupplyReceiptLine[]
+  StockBatche           StockBatch[]
+  StockMovement         StockMovement[]
+
+  @@index([itemId])
+  @@index([offerId])
+  @@index([productionOrderItemId])
+  @@index([supplyId])
+  @@map("scm_supply_items")
+}
+
+model ScmSupplyReceipt {
+  id         String                 @id @default(uuid())
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  currency   String
+  receivedAt DateTime
+  comment    String?
+  voidedAt   DateTime?
+  voidReason String?
+  supplyId   String
+  ScmSupply  ScmSupply              @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  lines      ScmSupplyReceiptLine[]
+  movements  StockMovement[]
+
+  @@map("scm_supply_receipts")
+}
+
+model ScmSupplyReceiptLine {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  receiptId    String
+  supplyItemId String
+  quantity     Decimal  @db.Decimal(14, 4)
+  pricePerUnit Decimal  @db.Decimal(14, 4)
+  currency     String
+  receivedAt   DateTime
+  comment      String?
+
+  receipt       ScmSupplyReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  ScmSupplyItem ScmSupplyItem    @relation(fields: [supplyItemId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([supplyItemId])
+  @@map("scm_supply_receipt_lines")
+}
+
+model ScmTransferItem {
+  id          String      @id @default(uuid())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime @updatedAt
+  transferId  String
+  quantity    Decimal     @db.Decimal(14, 4)
+  receivedQty Decimal     @default(0) @db.Decimal(14, 4)
+  itemId      String
+  MdmItem     MdmItem     @relation(fields: [itemId], references: [id])
+  ScmTransfer ScmTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([transferId])
+  @@map("scm_transfer_items")
+}
+
+model ScmTransfer {
+  id                                                   String            @id @default(uuid())
+  createdAt                                            DateTime          @default(now())
+  updatedAt                                            DateTime @updatedAt
+  fromWarehouseId                                      String
+  toWarehouseId                                        String
+  currency                                             String            @default("USD")
+  status                                               ScmTransferStatus @default(DRAFT)
+  ScmTransferItem                                      ScmTransferItem[]
+  warehouses_scm_transfers_fromWarehouseIdTowarehouses Warehouse         @relation("scm_transfers_fromWarehouseIdTowarehouses", fields: [fromWarehouseId], references: [id])
+  warehouses_scm_transfers_toWarehouseIdTowarehouses   Warehouse         @relation("scm_transfers_toWarehouseIdTowarehouses", fields: [toWarehouseId], references: [id])
+
+  @@index([fromWarehouseId])
+  @@index([status])
+  @@index([toWarehouseId])
+  @@map("scm_transfers")
+}
+
+model SpecProfile {
+  id           String            @id @default(uuid())
+  itemId       String
+  status       SpecProfileStatus
+  version      Int?
+  facts        Json
+  approvedAt   DateTime?
+  approvedById String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime @updatedAt
+  User         User?             @relation(fields: [approvedById], references: [id])
+  MdmItem      MdmItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, status])
+  @@index([itemId])
+  @@index([status])
+  @@map("spec_profiles")
+}
+
+model StockBatch {
+  id                    String               @id @default(uuid())
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  itemId                String
+  warehouseId           String
+  quantity              Decimal              @db.Decimal(14, 4)
+  costPerUnit           Decimal              @db.Decimal(14, 4)
+  currency              String               @default("RUB")
+  sourceType            BatchSourceType
+  sourceDocId           String?
+  productionOrderItemId String?
+  supplyItemId          String?
+  baseUnitCost          Decimal?             @db.Decimal(18, 4)
+  customsUnitCost       Decimal?             @db.Decimal(18, 4)
+  inboundUnitCost       Decimal?             @db.Decimal(18, 4)
+  logisticsUnitCost     Decimal?             @db.Decimal(18, 4)
+  unitCostBase          Decimal?             @db.Decimal(18, 6)
+  MdmItem               MdmItem              @relation(fields: [itemId], references: [id])
+  ProductionOrderItem   ProductionOrderItem? @relation(fields: [productionOrderItemId], references: [id])
+  ScmSupplyItem         ScmSupplyItem?       @relation(fields: [supplyItemId], references: [id])
+  warehouse             Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  StockMovement         StockMovement[]
+
+  @@index([itemId])
+  @@index([sourceDocId])
+  @@index([warehouseId])
+  @@map("stock_batches")
+}
+
+model StockMovement {
+  id                                                                                    String                          @id @default(uuid())
+  createdAt                                                                             DateTime                        @default(now())
+  batchId                                                                               String?
+  itemId                                                                                String
+  warehouseId                                                                           String
+  quantity                                                                              Decimal                         @db.Decimal(14, 4)
+  costPerUnit                                                                           Decimal?                        @db.Decimal(14, 4)
+  currency                                                                              String                          @default("RUB")
+  movementType                                                                          MovementType
+  docType                                                                               MovementDocType
+  docId                                                                                 String?
+  supplyItemId                                                                          String?
+  productionOrderItemId                                                                 String?
+  consumptionOperationId                                                                String?
+  inventoryTransactionId                                                                String?
+  supplyReceiptId                                                                       String?
+  meta                                                                                  Json?
+  productionBatchId                                                                     String?
+  sourceDocId                                                                           String?
+  sourceDocType                                                                         AccountingDocType?
+  InventoryAccountingLink                                                               InventoryAccountingLink[]
+  inventory_transactions_inventory_transactions_stockMovementIdTostock_movements        InventoryTransaction[]          @relation("inventory_transactions_stockMovementIdTostock_movements")
+  StockBatche                                                                           StockBatch?                     @relation(fields: [batchId], references: [id])
+  supplyReceipt                                                                         ScmSupplyReceipt?               @relation(fields: [supplyReceiptId], references: [id], onDelete: SetNull)
+  ProductionConsumptionOperation                                                        ProductionConsumptionOperation? @relation(fields: [consumptionOperationId], references: [id])
+  inventory_transactions_stock_movements_inventoryTransactionIdToinventory_transactions InventoryTransaction?           @relation("stock_movements_inventoryTransactionIdToinventory_transactions", fields: [inventoryTransactionId], references: [id])
+  MdmItem                                                                               MdmItem                         @relation(fields: [itemId], references: [id])
+  ProductionBatche                                                                      ProductionBatche?               @relation(fields: [productionBatchId], references: [id])
+  ProductionOrderItem                                                                   ProductionOrderItem?            @relation(fields: [productionOrderItemId], references: [id])
+  ScmSupplyItem                                                                         ScmSupplyItem?                  @relation(fields: [supplyItemId], references: [id])
+  warehouse                                                                             Warehouse                       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([consumptionOperationId])
+  @@index([docId])
+  @@index([supplyReceiptId])
+  @@index([docType, docId, supplyReceiptId])
+  @@index([inventoryTransactionId])
+  @@index([itemId])
+  @@index([productionBatchId])
+  @@index([warehouseId])
+  @@map("stock_movements")
+}
+
+model StockReservation {
+  id                String                  @id @default(uuid())
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  itemId            String
+  warehouseId       String
+  quantity          Decimal                 @db.Decimal(18, 4)
+  reservedForType   StockReservationForType
+  reservedForId     String
+  productionOrderId String?
+  expiresAt         DateTime?
+  comment           String?
+  MdmItem           MdmItem                 @relation(fields: [itemId], references: [id])
+  ProductionOrder   ProductionOrder?        @relation(fields: [productionOrderId], references: [id])
+  warehouse         Warehouse               @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([productionOrderId])
+  @@index([reservedForType, reservedForId])
+  @@index([warehouseId, itemId])
+  @@map("stock_reservations")
+}
+
+model SupplierItem {
+  id           String               @id @default(uuid())
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime @updatedAt
+  supplierId   String
+  name         String
+  code         String
+  type         SupplierItemType
+  category     SupplierItemCategory
+  unit         String
+  isActive     Boolean              @default(true)
+  description  String?
+  notes        String?
+  sku          String?
+  currency     String?
+  price        Decimal?             @db.Decimal(14, 4)
+  minOrderQty  Decimal?             @db.Decimal(14, 4)
+  leadTimeDays Int?
+  metadata     Json?
+  itemId       String?              @unique
+  MdmItem      MdmItem?             @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  counterparty Counterparty         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, code])
+  @@index([category])
+  @@index([isActive])
+  @@index([supplierId])
+  @@index([type])
+  @@map("supplier_items")
+}
+
+model SupplierLegalProfile {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  supplierId       String
+  countryCode      String
+  inn              String?
+  kpp              String?
+  ogrn             String?
+  legalAddress     String?
+  actualAddress    String?
+  bankAccount      String?
+  bankName         String?
+  bankBic          String?
+  bankCorrAccount  String?
+  bankExtraDetails String?
+  edoType          String?
+  edoNumber        String?
+  generalDirector  String?
+  counterparty     Counterparty @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, countryCode])
+  @@index([countryCode])
+  @@index([supplierId])
+  @@map("supplier_legal_profiles")
+}
+
+model SupplierService {
+  id                  String                  @id @default(uuid())
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime @updatedAt
+  supplierId          String
+  name                String
+  code                String?
+  category            SupplierServiceCategory @default(OTHER)
+  unit                String
+  basePrice           Decimal?                @db.Decimal(14, 4)
+  currency            String?
+  isActive            Boolean                 @default(true)
+  notes               String?
+  metadata            Json?
+  ScmServiceOperation ScmServiceOperation[]
+  counterparty        Counterparty            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, code])
+  @@index([category])
+  @@index([isActive])
+  @@index([supplierId])
+  @@map("supplier_services")
+}
+
+enum CounterpartyRole {
+  SUPPLIER
+  SERVICE_PROVIDER
+}
+
+model Counterparty {
+  id                   String                 @id @default(uuid())
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime @updatedAt
+  name                 String
+  code                 String                 @unique
+  roles                CounterpartyRole[]     @default([SUPPLIER])
+  types                SupplierType[]         @default([])
+  status               SupplierStatus         @default(ACTIVE)
+  countryId            String?
+  suppliesWhat         String?
+  contactPerson        String?
+  email                String?
+  phone                String?
+  website              String?
+  legalName            String?
+  taxId                String?
+  registrationNumber   String?
+  legalAddress         String?
+  bankDetails          Json?
+  bankAccount          String?
+  corrAccount          String?
+  bik                  String?
+  bankName             String?
+  extraPaymentDetails  String?
+  edoSystem            String?
+  edoNumber            String?
+  ceoFullName          String?
+  tags                 String[]
+  notes                String?
+  CounterpartyOffer    CounterpartyOffer[]
+  FinancialDocument    FinancialDocument[]
+  ProductionOrder      ProductionOrder[]
+  ScmProductSupplier   ScmProductSupplier[]
+  ScmServiceOperation  ScmServiceOperation[]
+  ScmSupply            ScmSupply[]
+  SupplierItem         SupplierItem[]
+  SupplierLegalProfile SupplierLegalProfile[]
+  SupplierService      SupplierService[]
+  moneyTransactions    MoneyTransaction[]       @relation("money_transactions_counterparty")
+  PaymentRequest       PaymentRequest[]
+  Country              Country?               @relation(fields: [countryId], references: [id])
+
+  @@index([countryId])
+  @@index([status])
+  @@map("suppliers")
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  text      String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model User {
+  id          String        @id @default(uuid())
+  email       String        @unique
+  password    String
+  roleId      String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime @updatedAt
+  SpecProfile SpecProfile[]
+  role        Role          @relation(fields: [roleId], references: [id])
+  paymentRequestsRequestedBy PaymentRequest[] @relation("payment_requests_requested_by")
+  financeApprovalPoliciesApprover FinanceApprovalPolicy[] @relation("finance_approval_policies_approver")
+
+  @@index([email])
+  @@index([roleId])
+  @@map("users")
+}
+
+model Warehouse {
+  id                                                                          String                 @id @default(uuid())
+  createdAt                                                                   DateTime               @default(now())
+  updatedAt                                                                   DateTime @updatedAt
+  name                                                                        String
+  code                                                                        String                 @unique
+  type                                                                        WarehouseType          @default(OWN)
+  countryId                                                                   String?
+  city                                                                        String?
+  address                                                                     String?
+  isActive                                                                    Boolean                @default(true)
+  notes                                                                       String?
+  AccountingEntry                                                             AccountingEntry[]
+  InventoryAdjustment                                                         InventoryAdjustment[]
+  InventoryBalance                                                            InventoryBalance[]
+  InventoryTransaction                                                        InventoryTransaction[]
+  production_order_items_production_order_items_sourceWarehouseIdTowarehouses ProductionOrderItem[]  @relation("production_order_items_sourceWarehouseIdTowarehouses")
+  production_order_items_production_order_items_targetWarehouseIdTowarehouses ProductionOrderItem[]  @relation("production_order_items_targetWarehouseIdTowarehouses")
+  production_orders_production_orders_outputWarehouseIdTowarehouses           ProductionOrder[]      @relation("production_orders_outputWarehouseIdTowarehouses")
+  production_orders_production_orders_warehouseIdTowarehouses                 ProductionOrder[]      @relation("production_orders_warehouseIdTowarehouses")
+  SalesDocumentLine                                                           SalesDocumentLine[]
+  SalesDocument                                                               SalesDocument[]
+  ScmStock                                                                    ScmStock[]
+  ScmSupply                                                                   ScmSupply[]
+  scm_transfers_scm_transfers_fromWarehouseIdTowarehouses                     ScmTransfer[]          @relation("scm_transfers_fromWarehouseIdTowarehouses")
+  scm_transfers_scm_transfers_toWarehouseIdTowarehouses                       ScmTransfer[]          @relation("scm_transfers_toWarehouseIdTowarehouses")
+  StockBatche                                                                 StockBatch[]
+  StockMovement                                                               StockMovement[]
+  StockReservation                                                            StockReservation[]
+  Country                                                                     Country?               @relation(fields: [countryId], references: [id])
+
+  @@index([countryId])
+  @@index([isActive])
+  @@index([type])
+  @@map("warehouses")
+}
+
+enum AccountingDocType {
+  SUPPLY_RECEIPT
+  PRODUCTION_COMPLETION
+  FINANCIAL_DOCUMENT
+  FINANCIAL_DOCUMENT_ACCRUAL
+  FINANCIAL_DOCUMENT_RECOGNITION
+  PAYMENT
+  PAYMENT_EXECUTION
+  INTERNAL_TRANSFER
+  MARKETPLACE_PAYOUT_TRANSFER
+  STATEMENT_LINE_FEE
+  ACQUIRING_EVENT
+  STOCK_TRANSFER
+  STOCK_ADJUSTMENT
+  SALES_DOCUMENT
+  SUPPLY
+  INVENTORY_ADJUSTMENT
+  TEST_SEED
+  OTHER
+  PRODUCTION_CONSUMPTION
+}
+
+enum CashTransferStatus {
+  PAIRED
+  POSTED
+  CANCELED
+}
+
+model CashTransfer {
+  id                  String            @id @default(uuid())
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  legalEntityId       String
+  fromAccountId       String
+  toAccountId         String
+  occurredAt          DateTime
+  amount              Decimal           @db.Decimal(18, 2)
+  currency            String
+  amountBase          Decimal           @db.Decimal(18, 2)
+  provider            String?
+  externalRef         String?
+  walletStatementLineId String?
+  bankStatementLineId   String?
+  status              CashTransferStatus @default(PAIRED)
+
+  legalEntity         LegalEntity        @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  fromAccount         FinancialAccount   @relation("CashTransferFromAccount", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount           FinancialAccount   @relation("CashTransferToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+  walletStatementLine StatementLine?     @relation("CashTransferWalletLine", fields: [walletStatementLineId], references: [id], onDelete: SetNull)
+  bankStatementLine   StatementLine?     @relation("CashTransferBankLine", fields: [bankStatementLineId], references: [id], onDelete: SetNull)
+
+  @@index([legalEntityId, occurredAt])
+  @@index([fromAccountId, toAccountId, occurredAt])
+  @@unique([legalEntityId, provider, externalRef])
+  @@map("cash_transfers")
+}
+
+enum CashAccountingLinkRole {
+  PAYMENT_PRINCIPAL
+  FEE
+  PAYOUT
+  REFUND
+  TRANSFER
+  ADJUSTMENT
+}
+
+model CashAccountingLink {
+  id                String             @id @default(uuid())
+  createdAt         DateTime           @default(now())
+  moneyTransactionId String
+  accountingEntryId String
+  role              CashAccountingLinkRole
+
+  moneyTransaction  MoneyTransaction   @relation(fields: [moneyTransactionId], references: [id], onDelete: Cascade)
+  accountingEntry   AccountingEntry    @relation(fields: [accountingEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([moneyTransactionId, accountingEntryId, role])
+  @@index([accountingEntryId])
+  @@index([moneyTransactionId])
+  @@map("cash_accounting_links")
+}
+
+enum BatchSourceType {
+  SUPPLY
+  PRODUCTION
+  TRANSFER
+  MANUAL_ADJUSTMENT
+}
+
+enum BcmBrandProfileStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum BcmListingProfileStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum BcmListingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BcmProductProfileStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum FinanceLinkedDocType {
+  SUPPLY
+  SUPPLY_RECEIPT
+  PRODUCTION_ORDER
+  SERVICE_OPERATION
+  STOCK_ADJUSTMENT
+  OTHER
+  SALES_DOCUMENT
+}
+
+enum FinanceCapitalizationPolicy {
+  EXPENSE_IMMEDIATE
+  PREPAID_EXPENSE
+  FIXED_ASSET
+  INTANGIBLE
+  INVENTORY
+}
+
+enum FinancialDocumentDirection {
+  INCOMING
+  OUTGOING
+}
+
+enum FinancialDocumentStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  ISSUED
+}
+
+enum FinancialDocumentType {
+  INVOICE
+  BILL
+  ACT
+  CREDIT_NOTE
+  OTHER
+  SUPPLY
+  PRODUCTION
+  PURCHASE
+  EXPENSE
+  SUPPLY_INVOICE
+  PRODUCTION_INVOICE
+  SERVICE_INVOICE
+  SALES
+  RENT
+  MARKETING
+  TAX
+  LOAN_PRINCIPAL
+  LOAN_INTEREST
+  DIVIDEND
+}
+
 enum IntegrationStatus {
   ACTIVE
   INACTIVE
   ERROR
 }
 
-model MarketplaceIntegration {
-  id String @id @default(cuid())
+enum InventoryAdjustmentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
 
-  name String
+enum InventoryDirection {
+  IN
+  OUT
+}
 
-  marketplaceId String
-  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
-
-  brandId String
-  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
-
-  countryId String
-  country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
-
-  status     IntegrationStatus @default(ACTIVE)
-  lastSyncAt DateTime?
-
-  // Ozon Seller API
-  ozonSellerClientId String?
-  ozonSellerToken    String?
-
-  // Ozon Performance API
-  ozonPerfClientId     String?
-  ozonPerfClientSecret String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  logs IntegrationLog[]
-
-  @@unique([marketplaceId, brandId, countryId], name: "uniq_marketplace_brand_country")
-  @@index([marketplaceId])
-  @@index([brandId])
-  @@index([countryId])
-  @@index([status])
-  @@map("marketplace_integrations")
+enum LegalEntityStatus {
+  ACTIVE
+  INACTIVE
 }
 
 enum LogLevel {
@@ -555,37 +2323,157 @@ enum LogSource {
   AGENT_RUN
 }
 
-// ============================================
-// 10. SCM Suppliers
-// ============================================
-
-enum SupplierType {
-  MANUFACTURER
-  COMPONENT_SUPPLIER
-  PACKAGING_SUPPLIER
-  PRINTING_HOUSE
-  OTHER
-}
-
-enum SupplierStatus {
-  ACTIVE
-  INACTIVE
-  BLACKLISTED
-  POTENTIAL
-}
-
-enum SupplierRole {
-  PRODUCER
-  RAW_MATERIAL
-  PACKAGING
-  PRINTING
-  LOGISTICS
-  OTHER
-}
-
-enum SupplierItemType {
+enum MdmItemType {
+  PRODUCT
   MATERIAL
   SERVICE
+}
+
+enum CounterpartyOfferType {
+  MATERIAL
+  PRODUCT
+  SERVICE
+}
+
+enum CounterpartyOfferStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MovementDocType {
+  SUPPLY
+  TRANSFER
+  PRODUCTION_INPUT
+  PRODUCTION_OUTPUT
+  SALE
+  ADJUSTMENT
+  TRANSFER_OUT
+  TRANSFER_IN
+  STOCK_ADJUSTMENT
+  SCRAP
+  LOSS
+}
+
+enum MovementType {
+  INCOME
+  OUTCOME
+  SCRAP
+  LOSS
+  ADJUSTMENT
+}
+
+enum OsEventStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
+enum OverheadAllocationMethod {
+  PER_UNIT
+  PER_ORDER
+  PERCENT_OF_MATERIAL_COST
+}
+
+enum OverheadScope {
+  GLOBAL
+  BRAND
+  COUNTRY
+  ITEM
+  CATEGORY
+  SUPPLY
+  PRODUCTION_ORDER
+}
+
+enum ProductionConsumptionStatus {
+  NOT_CONSUMED
+  PARTIALLY_CONSUMED
+  CONSUMED
+}
+
+enum ProductionOrderItemStatus {
+  PLANNED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  USED_IN_PRODUCTION
+  NOT_NEEDED
+}
+
+enum ProductionOrderStatus {
+  DRAFT
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum SalesDocumentStatus {
+  DRAFT
+  IMPORTED
+  VALIDATED
+  POSTED
+  CANCELLED
+}
+
+enum ScmComponentProvisionStatus {
+  NOT_PLANNED
+  PLANNED_SUPPLY
+  PLANNED_TRANSFER
+  PARTIALLY_PROVIDED
+  PROVIDED
+  NOT_PROVIDED
+}
+
+enum ScmComponentSourceType {
+  OWN_STOCK
+  PURCHASE_TO_OWN_WAREHOUSE
+  PURCHASE_DIRECT_TO_MANUFACTURE
+  TRANSFER_FROM_OWN_WAREHOUSE
+  THIRD_PARTY_WAREHOUSE
+}
+
+enum ScmProductType {
+  MANUFACTURED
+  PURCHASED
+}
+
+enum ScmServiceCategory {
+  MANUFACTURING
+  LABELING
+  PACKAGING
+  LOGISTICS_INBOUND
+  LOGISTICS_OUTBOUND
+  STORAGE
+  OTHER
+}
+
+enum ScmSupplyStatus {
+  DRAFT
+  ORDERED
+  PARTIAL_RECEIVED
+  RECEIVED
+  CANCELED
+  CLOSED
+}
+
+enum ScmTransferStatus {
+  DRAFT
+  REQUESTED
+  IN_TRANSIT
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CLOSED
+}
+
+enum SpecProfileStatus {
+  DRAFT
+  APPROVED
+}
+
+enum StockReservationForType {
+  PRODUCTION_ORDER
+  SALES_ORDER
+  MANUAL
 }
 
 enum SupplierItemCategory {
@@ -600,621 +2488,19 @@ enum SupplierItemCategory {
   OTHER
 }
 
-enum ScmProductType {
-  MANUFACTURED
-  PURCHASED
+enum SupplierItemType {
+  MATERIAL
+  SERVICE
 }
 
-enum ProductionOrderStatus {
-  DRAFT
-  PLANNED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum ProductionOrderItemStatus {
-  PLANNED
-  ORDERED
-  PARTIALLY_RECEIVED
-  RECEIVED
-  USED_IN_PRODUCTION
-  NOT_NEEDED
-}
-
-enum WarehouseType {
-  OWN // наш собственный склад
-  MANUFACTURER // склад/производство подрядчика
-  THIRD_PARTY // 3PL, логистический партнёр
-}
-
-enum ScmSupplyStatus {
-  DRAFT // черновик
-  ORDERED // заказано поставщику
-  PARTIAL_RECEIVED // частично получено
-  RECEIVED // полностью получено
-  CANCELED // отменено
-}
-
-enum ScmServiceCategory {
-  MANUFACTURING
-  LABELING
+enum SupplierRole {
+  PRODUCER
+  RAW_MATERIAL
   PACKAGING
-  LOGISTICS_INBOUND
-  LOGISTICS_OUTBOUND
-  STORAGE
+  PRINTING
+  LOGISTICS
   OTHER
 }
-
-enum FinancialDocumentType {
-  INVOICE // счёт
-  BILL // счёт/счёт на оплату
-  ACT // акт выполненных работ
-  CREDIT_NOTE // кредит-нота
-  OTHER // прочее
-  SUPPLY // документ по поставке
-  PRODUCTION // документ по производству
-  PURCHASE // документ по закупке
-  EXPENSE // документ по расходам
-  // Legacy values for backward compatibility
-  SUPPLY_INVOICE
-  PRODUCTION_INVOICE
-  SERVICE_INVOICE
-}
-
-enum FinancialDocumentDirection {
-  INCOMING // к нам (от поставщика)
-  OUTGOING // от нас (к клиенту)
-}
-
-enum FinancialDocumentStatus {
-  DRAFT
-  SENT
-  PARTIALLY_PAID
-  PAID
-  CANCELLED
-  // Legacy value for backward compatibility
-  ISSUED
-}
-
-model IntegrationLog {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  level   LogLevel
-  source  LogSource
-  message String
-
-  // Ссылка на конкретную интеграцию (может быть null, если лог общий по агентам)
-  integrationId String?
-  integration   MarketplaceIntegration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  // Ссылка на AgentRun, если лог относится к запуску агента
-  agentRunId String?
-  agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
-
-  // Дополнительные данные (payload / error / контекст)
-  details Json?
-
-  @@index([integrationId])
-  @@index([agentRunId])
-  @@map("integration_logs")
-}
-
-model Supplier {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  name String
-  code String @unique
-
-  types  SupplierType[] @default([])
-  status SupplierStatus @default(ACTIVE)
-
-  countryId String?
-  country   Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
-
-  suppliesWhat  String? // кратко: что поставляет / производит
-  contactPerson String?
-  email         String?
-  phone         String?
-  website       String?
-
-  legalName          String? // юр. наименование
-  taxId              String? // ИНН / Tax ID
-  registrationNumber String? // ОГРН и аналоги
-  legalAddress       String? // юр. адрес
-  bankDetails        Json? // банковские реквизиты (как JSON) - legacy, для обратной совместимости
-
-  // Банковские реквизиты (отдельные поля)
-  bankAccount         String? // расчётный счёт
-  corrAccount         String? // корр. счёт
-  bik                 String? // BIC
-  bankName            String? // название банка
-  extraPaymentDetails String? // доп. платёжная инфа
-
-  // ЭДО и доп. юр. инфо
-  edoSystem   String? // система ЭДО (например: "Тензор СБИС")
-  edoNumber   String? // идентификатор/адрес ЭДО
-  ceoFullName String? // ФИО гендиректора
-
-  tags  String[] // произвольные теги
-  notes String?
-
-  legalProfiles      SupplierLegalProfile[]
-  scmProductLinks    ScmProductSupplier[]
-  items              SupplierItem[]
-  supplies           ScmSupply[]
-  serviceOperations  ScmServiceOperation[]  @relation("SupplierServiceOperations")
-  services           SupplierService[] // каталог услуг поставщика
-  financialDocuments FinancialDocument[]    @relation("SupplierFinancialDocuments")
-  productionOrders   ProductionOrder[]      @relation("ProductionOrderManufacturer")
-
-  @@index([countryId])
-  @@index([status])
-  @@map("suppliers")
-}
-
-model ScmProductSupplier {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  scmProductId String
-  supplierId   String
-  role         SupplierRole
-  isPrimary    Boolean      @default(false)
-
-  leadTimeDays     Int? // срок поставки в днях
-  minOrderQty      Int? // минимальный заказ
-  purchaseCurrency String? // валюта закупки, например "RUB", "USD"
-  purchasePrice    Decimal? @db.Decimal(14, 4)
-
-  notes String?
-
-  scmProduct ScmProduct @relation(fields: [scmProductId], references: [id], onDelete: Cascade)
-  supplier   Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  @@unique([scmProductId, supplierId, role])
-  @@index([scmProductId])
-  @@index([supplierId])
-  @@map("scm_product_suppliers")
-}
-
-model SupplierLegalProfile {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  countryCode String // "RU", "KZ", "ID" и т.д.
-
-  // Блок РФ-реквизитов (можем использовать только для countryCode = "RU")
-  inn  String? // ИНН
-  kpp  String? // КПП
-  ogrn String? // ОГРН
-
-  legalAddress  String? // юр. адрес
-  actualAddress String? // фактический адрес
-
-  bankAccount      String? // р/с
-  bankName         String?
-  bankBic          String?
-  bankCorrAccount  String? // кор/с
-  bankExtraDetails String? // доп. информация по оплатам
-
-  edoType   String? // например "СБИС", "Диадок" (EDO System)
-  edoNumber String?
-
-  generalDirector String? // ФИО ген. директора (CEO Full Name)
-
-  @@unique([supplierId, countryCode])
-  @@index([supplierId])
-  @@index([countryCode])
-  @@map("supplier_legal_profiles")
-}
-
-model SupplierItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  name     String
-  code     String
-  type     SupplierItemType
-  category SupplierItemCategory
-  unit     String
-
-  isActive Boolean @default(true)
-
-  description  String?  @db.Text
-  notes        String?  @db.Text // дополнительные заметки
-  sku          String?
-  currency     String?
-  price        Decimal? @db.Decimal(14, 4)
-  minOrderQty  Decimal? @db.Decimal(14, 4)
-  leadTimeDays Int?
-  metadata     Json? // резерв для специфики
-
-  bomItems              ScmBomItem[]
-  productionOrderItems  ProductionOrderItem[]
-  supplyItems           ScmSupplyItem[]
-  stocks                ScmStock[]
-  inventoryBalances     InventoryBalance[]
-  inventoryTransactions InventoryTransaction[] @relation("InventoryTransactions")
-
-  @@unique([supplierId, code])
-  @@index([supplierId])
-  @@index([type])
-  @@index([category])
-  @@index([isActive])
-  @@map("supplier_items")
-}
-
-model ScmBomItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  productId String
-  product   ScmProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  supplierItemId String
-  supplierItem   SupplierItem @relation(fields: [supplierItemId], references: [id], onDelete: Cascade)
-
-  quantity Decimal @db.Decimal(14, 4)
-  unit     String
-
-  wastagePercent Decimal? @db.Decimal(5, 2)
-  isOptional     Boolean  @default(false)
-
-  note String? @db.Text
-
-  @@index([productId])
-  @@index([supplierItemId])
-  @@map("scm_bom_items")
-}
-
-// ============================================
-// 12. Production Orders
-// ============================================
-
-model ProductionOrder {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  code String @unique
-  name String
-
-  productId String
-  product   ScmProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
-
-  quantityPlanned Decimal @db.Decimal(14, 4)
-  unit            String
-
-  status ProductionOrderStatus @default(PLANNED)
-
-  plannedStartAt DateTime?
-  plannedEndAt   DateTime?
-  actualStartAt  DateTime?
-  actualEndAt    DateTime?
-
-  productionSite String? @db.Text
-  notes          String? @db.Text
-
-  productionCountryId String?
-  productionCountry   Country? @relation("ProductionOrderCountry", fields: [productionCountryId], references: [id], onDelete: SetNull)
-
-  manufacturerId String?
-  manufacturer   Supplier? @relation("ProductionOrderManufacturer", fields: [manufacturerId], references: [id], onDelete: SetNull)
-
-  items              ProductionOrderItem[]
-  supplies           ScmSupply[]
-  serviceOperations  ScmServiceOperation[] @relation("ProductionOrderServiceOperations")
-  financialDocuments FinancialDocument[]   @relation("ProductionOrderFinancialDocuments")
-  warehouse          Warehouse?            @relation(fields: [warehouseId], references: [id])
-  warehouseId        String?
-
-  @@index([productId])
-  @@index([status])
-  @@index([code])
-  @@map("production_orders")
-}
-
-model ProductionOrderItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  productionOrderId String
-  productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
-
-  supplierItemId String
-  supplierItem   SupplierItem @relation(fields: [supplierItemId], references: [id], onDelete: Restrict)
-
-  quantityPlanned Decimal @db.Decimal(14, 4)
-  quantityUnit    String
-
-  quantityReceived Decimal? @db.Decimal(14, 4)
-
-  status ProductionOrderItemStatus @default(PLANNED)
-
-  expectedDate DateTime?
-  receivedDate DateTime?
-
-  fromBom Boolean @default(true)
-
-  note String? @db.Text
-
-  supplyItems ScmSupplyItem[]
-
-  @@index([productionOrderId])
-  @@index([supplierItemId])
-  @@index([status])
-  @@map("production_order_items")
-}
-
-// ============================================
-// 13. Warehouses
-// ============================================
-
-model Warehouse {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  name String
-  code String        @unique
-  type WarehouseType @default(OWN)
-
-  countryId String?
-  country   Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
-
-  city     String?
-  address  String? @db.Text
-  isActive Boolean @default(true)
-  notes    String? @db.Text
-
-  stocks                ScmStock[]
-  supplies              ScmSupply[]
-  productionOrders      ProductionOrder[]
-  inventoryBalances     InventoryBalance[]     @relation("InventoryBalances")
-  inventoryTransactions InventoryTransaction[] @relation("InventoryTransactions")
-
-  @@index([countryId])
-  @@index([isActive])
-  @@index([type])
-  @@map("warehouses")
-}
-
-// ============================================
-// 14. SCM Stocks (Extended)
-// ============================================
-
-model ScmStock {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-
-  scmProductId String? // для готового товара
-  scmProduct   ScmProduct? @relation(fields: [scmProductId], references: [id], onDelete: Cascade)
-
-  supplierItemId String? // для сырья/упаковки
-  supplierItem   SupplierItem? @relation(fields: [supplierItemId], references: [id], onDelete: Cascade)
-
-  quantity Decimal @db.Decimal(14, 4)
-  unit     String
-
-  @@unique([warehouseId, scmProductId, supplierItemId])
-  @@index([warehouseId])
-  @@index([scmProductId])
-  @@index([supplierItemId])
-  @@map("scm_stocks")
-}
-
-// ============================================
-// 15. SCM Supplies (Extended)
-// ============================================
-
-model ScmSupply {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  code   String          @unique
-  status ScmSupplyStatus @default(DRAFT)
-
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-
-  productionOrderId String?
-  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
-
-  currency    String  @default("RUB")
-  totalAmount Decimal @default(0) @db.Decimal(14, 4)
-
-  orderDate    DateTime?
-  expectedDate DateTime?
-  receivedDate DateTime?
-
-  comment String? @db.Text
-
-  items                 ScmSupplyItem[]
-  services              ScmServiceOperation[]
-  financialDocuments    FinancialDocument[]    @relation("SupplyFinancialDocuments")
-  inventoryTransactions InventoryTransaction[]
-
-  @@index([supplierId])
-  @@index([warehouseId])
-  @@index([productionOrderId])
-  @@index([status])
-  @@index([code])
-  @@map("scm_supplies")
-}
-
-// ============================================
-// 16. SCM Supply Items
-// ============================================
-
-model ScmSupplyItem {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  supplyId String
-  supply   ScmSupply @relation(fields: [supplyId], references: [id], onDelete: Cascade)
-
-  supplierItemId String?
-  supplierItem   SupplierItem? @relation(fields: [supplierItemId], references: [id], onDelete: SetNull)
-
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-
-  description String? @db.Text
-
-  unit String
-
-  quantityOrdered  Decimal @default(0) @db.Decimal(14, 4)
-  quantityReceived Decimal @default(0) @db.Decimal(14, 4)
-
-  pricePerUnit Decimal @default(0) @db.Decimal(14, 4)
-  currency     String
-
-  productionOrderItemId String?
-  productionOrderItem   ProductionOrderItem? @relation(fields: [productionOrderItemId], references: [id], onDelete: SetNull)
-
-  inventoryTransactions InventoryTransaction[]
-
-  @@index([supplyId])
-  @@index([supplierItemId])
-  @@index([productId])
-  @@index([productionOrderItemId])
-  @@map("scm_supply_items")
-}
-
-// ============================================
-// 16.1. Inventory Balance
-// ============================================
-
-model InventoryBalance {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  warehouseId String
-  warehouse   Warehouse @relation("InventoryBalances", fields: [warehouseId], references: [id], onDelete: Cascade)
-
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  supplierItemId String?
-  supplierItem   SupplierItem? @relation(fields: [supplierItemId], references: [id], onDelete: Cascade)
-
-  quantity Decimal @default(0) @db.Decimal(14, 4)
-
-  @@unique([warehouseId, productId, supplierItemId])
-  @@index([warehouseId])
-  @@index([productId])
-  @@index([supplierItemId])
-  @@map("inventory_balances")
-}
-
-// ============================================
-// 16.2. Inventory Transactions
-// ============================================
-
-enum InventoryDirection {
-  IN // приход
-  OUT // расход
-}
-
-model InventoryTransaction {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  warehouseId String
-  warehouse   Warehouse @relation("InventoryTransactions", fields: [warehouseId], references: [id], onDelete: Cascade)
-
-  productId String?
-  product   Product? @relation("InventoryTransactions", fields: [productId], references: [id], onDelete: SetNull)
-
-  supplierItemId String?
-  supplierItem   SupplierItem? @relation("InventoryTransactions", fields: [supplierItemId], references: [id], onDelete: SetNull)
-
-  supplyId String?
-  supply   ScmSupply? @relation(fields: [supplyId], references: [id], onDelete: SetNull)
-
-  supplyItemId String?
-  supplyItem   ScmSupplyItem? @relation(fields: [supplyItemId], references: [id], onDelete: SetNull)
-
-  direction InventoryDirection
-  quantity  Decimal            @db.Decimal(14, 4)
-  comment   String?            @db.Text
-
-  @@index([warehouseId])
-  @@index([productId])
-  @@index([supplierItemId])
-  @@index([supplyId])
-  @@index([supplyItemId])
-  @@map("inventory_transactions")
-}
-
-// ============================================
-// 17. SCM Service Operations
-// ============================================
-
-model ScmServiceOperation {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  supplierId String?
-  supplier   Supplier? @relation("SupplierServiceOperations", fields: [supplierId], references: [id], onDelete: SetNull)
-
-  category ScmServiceCategory
-  name     String
-
-  productionOrderId String?
-  productionOrder   ProductionOrder? @relation("ProductionOrderServiceOperations", fields: [productionOrderId], references: [id], onDelete: SetNull)
-
-  supplyId String?
-  supply   ScmSupply? @relation(fields: [supplyId], references: [id], onDelete: SetNull)
-
-  quantity     Decimal? @db.Decimal(14, 4)
-  unit         String?
-  pricePerUnit Decimal? @db.Decimal(14, 4)
-  totalAmount  Decimal  @db.Decimal(14, 4)
-  currency     String
-
-  financialDocumentId String?
-  financialDocument   FinancialDocument? @relation("FinancialDocumentServices", fields: [financialDocumentId], references: [id], onDelete: SetNull)
-
-  comment String? @db.Text
-
-  @@index([supplierId])
-  @@index([productionOrderId])
-  @@index([supplyId])
-  @@index([financialDocumentId])
-  @@index([category])
-  @@map("scm_service_operations")
-}
-
-// ============================================
-// 17.1. Supplier Services (Catalog)
-// ============================================
 
 enum SupplierServiceCategory {
   PRODUCTION
@@ -1222,192 +2508,24 @@ enum SupplierServiceCategory {
   OTHER
 }
 
-model SupplierService {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-
-  name     String
-  code     String?
-  category SupplierServiceCategory @default(OTHER)
-  unit     String
-
-  basePrice Decimal? @db.Decimal(14, 4)
-  currency  String?
-
-  isActive Boolean @default(true)
-  notes    String? @db.Text
-  metadata Json? // резерв для специфики
-
-  @@unique([supplierId, code], name: "unique_supplier_service_code")
-  @@index([supplierId])
-  @@index([category])
-  @@index([isActive])
-  @@map("supplier_services")
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+  POTENTIAL
 }
 
-// ============================================
-// 18. Financial Documents
-// ============================================
-
-model FinancialDocument {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Основные реквизиты документа
-  docNumber String? // номер документа
-  docDate   DateTime? // дата документа
-
-  type      FinancialDocumentType? // тип документа
-  direction FinancialDocumentDirection? // входящий / исходящий
-  status    FinancialDocumentStatus?    @default(DRAFT)
-
-  currency    String? // ISO-код, например "RUB", "USD"
-  amountTotal Decimal?  @db.Decimal(14, 4) // сумма по документу
-  amountPaid  Decimal?  @db.Decimal(14, 4) // сколько уже оплачено
-  dueDate     DateTime? // срок оплаты
-
-  // Связи
-  supplierId String?
-  supplier   Supplier? @relation("SupplierFinancialDocuments", fields: [supplierId], references: [id], onDelete: SetNull)
-
-  productionOrderId String?
-  productionOrder   ProductionOrder? @relation("ProductionOrderFinancialDocuments", fields: [productionOrderId], references: [id], onDelete: SetNull)
-
-  scmSupplyId String?
-  scmSupply   ScmSupply? @relation("SupplyFinancialDocuments", fields: [scmSupplyId], references: [id], onDelete: SetNull)
-
-  // Future relations (models to be created)
-  purchaseId String?
-  expenseId  String?
-
-  // Дополнительно
-  externalId String? // ID из внешней системы (банк, 1С и т.п.)
-  fileUrl    String? // ссылка на файл / объект в хранилище
-  notes      String? @db.Text // комментарий
-
-  // Legacy fields for backward compatibility
-  number    String? // legacy, используем docNumber
-  date      DateTime? // legacy, используем docDate
-  issueDate DateTime? // дата выставления
-  paidDate  DateTime? // дата полной оплаты (если статус PAID)
-
-  // Связь с услугами
-  services ScmServiceOperation[] @relation("FinancialDocumentServices")
-
-  // Legacy field for backward compatibility
-  comment String? @db.Text
-
-  @@index([supplierId])
-  @@index([productionOrderId])
-  @@index([scmSupplyId])
-  @@index([purchaseId])
-  @@index([expenseId])
-  @@index([status])
-  @@index([docNumber])
-  @@index([number]) // legacy index
-  @@map("financial_documents")
+enum SupplierType {
+  MANUFACTURER
+  COMPONENT_SUPPLIER
+  PACKAGING_SUPPLIER
+  PRINTING_HOUSE
+  OTHER
 }
 
-// ============================================
-// 11. BCM Listing Content Versions
-// ============================================
-
-enum ListingVersionSource {
-  MANUAL // пользователь руками
-  AI_AGENT // сгенерировал ИИ-агент
-  IMPORT // импорт из внешней системы
+enum WarehouseType {
+  OWN
+  MANUFACTURER
+  THIRD_PARTY
 }
 
-model ListingContentVersion {
-  id String @id @default(cuid())
-
-  /// Ссылка на BCM Listing (Product)
-  listingId String
-  listing   Product @relation(fields: [listingId], references: [id], onDelete: Cascade)
-
-  /// Ссылка на маркетплейс (опционально — на будущее, под OZON/WB и др.)
-  marketplaceId String?
-  marketplace   Marketplace? @relation(fields: [marketplaceId], references: [id])
-
-  /// Порядковый номер версии (1, 2, 3, … для конкретного листинга)
-  versionNumber Int
-
-  /// От кого/чего пришли изменения
-  source ListingVersionSource @default(MANUAL)
-
-  /// Краткое текстовое описание причины изменения (опционально)
-  reason String?
-
-  /// Кто изменил (опционально, на будущее)
-  createdByUserId String?
-  createdBy       User?   @relation(fields: [createdByUserId], references: [id])
-
-  /// Снапшот контентных полей листинга
-  title            String?
-  subtitle         String?
-  shortDescription String?
-  fullDescription  String?
-  keywords         String?
-  contentMeta      Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([listingId, versionNumber])
-  @@index([listingId])
-  @@map("listing_content_versions")
-}
-
-// ============================================
-// 12. BCM Product Content Versions (OZON)
-// ============================================
-
-enum ContentChangeSource {
-  MANUAL
-  AI
-  SYSTEM
-}
-
-model ProductContentVersion {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  /// Marketplace code, например: "OZON" (на будущее, пока можно заполнять из product.marketplaceCode или null)
-  marketplaceCode String?
-
-  /// Номер версии (автоинкремент на productId)
-  versionNumber Int
-
-  /// Snapshot контента на момент изменения
-  mpTitle            String? @db.Text
-  mpSubtitle         String? @db.Text
-  mpShortDescription String? @db.Text
-  mpDescription      String? @db.Text
-  keywords           String? @db.Text
-  contentAttributes  Json?
-
-  /// Источник изменения: MANUAL, AI, SYSTEM
-  source ContentChangeSource @default(MANUAL)
-
-  /// Кто инициировал: userId, если есть авторизованный пользователь
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
-
-  /// Опциональное имя AI-агента / описания источника (например: "ozon-content-agent-v1")
-  agentLabel String?
-
-  /// Необязательный комментарий (например, "Initial version", "Experiment A/B title test")
-  comment String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([productId, versionNumber])
-  @@index([productId])
-  @@index([productId, versionNumber])
-  @@map("product_content_versions")
-}

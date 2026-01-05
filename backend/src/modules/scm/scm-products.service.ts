@@ -6,16 +6,13 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { CreateScmProductDto } from './dto/create-scm-product.dto';
 import { UpdateScmProductDto } from './dto/update-scm-product.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, ScmProductType } from '@prisma/client';
 
 @Injectable()
 export class ScmProductsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(filters?: {
-    brandId?: string;
-    search?: string;
-  }) {
+  async findAll(filters?: { brandId?: string; search?: string }) {
     const where: Prisma.ScmProductWhereInput = {};
 
     if (filters?.brandId) {
@@ -42,16 +39,11 @@ export class ScmProductsService {
     const products = await this.prisma.scmProduct.findMany({
       where,
       include: {
-        brand: {
+        Brand: {
           select: {
             id: true,
             name: true,
             code: true,
-          },
-        },
-        _count: {
-          select: {
-            products: true,
           },
         },
       },
@@ -65,12 +57,12 @@ export class ScmProductsService {
       internalName: product.internalName,
       sku: product.sku,
       type: product.type,
-      brand: product.brand,
+      brand: product.Brand,
       baseDescription: product.baseDescription,
       composition: product.composition,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
-      listingsCount: product._count.products,
+      listingsCount: 0,
     }));
   }
 
@@ -78,31 +70,18 @@ export class ScmProductsService {
     const product = await this.prisma.scmProduct.findUnique({
       where: { id },
       include: {
-        brand: {
+        Brand: {
           select: {
             id: true,
             name: true,
             code: true,
           },
         },
-        products: {
-          select: {
-            id: true,
-            name: true,
-            marketplace: {
-              select: {
-                id: true,
-                name: true,
-                code: true,
-              },
-            },
-          },
-        },
-        suppliers: {
+        ScmProductSupplier: {
           include: {
-            supplier: {
+            supplierCounterparty: {
               include: {
-                country: {
+                Country: {
                   select: {
                     id: true,
                     name: true,
@@ -125,32 +104,37 @@ export class ScmProductsService {
       internalName: product.internalName,
       sku: product.sku,
       type: product.type,
-      brand: product.brand,
+      brand: product.Brand,
       baseDescription: product.baseDescription,
       composition: product.composition,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
-      listings: product.products,
-      suppliers: product.suppliers.map((link) => ({
+      listings: [],
+      suppliers: product.ScmProductSupplier.map((link) => ({
         id: link.id,
         role: link.role,
         isPrimary: link.isPrimary,
         leadTimeDays: link.leadTimeDays,
         minOrderQty: link.minOrderQty,
         purchaseCurrency: link.purchaseCurrency,
-        purchasePrice: link.purchasePrice ? link.purchasePrice.toNumber() : null,
+        purchasePrice: link.purchasePrice
+          ? link.purchasePrice.toNumber()
+          : null,
         notes: link.notes,
         supplier: {
-          id: link.supplier.id,
-          name: link.supplier.name,
-          code: link.supplier.code,
-          types: link.supplier.types ?? [],
-          primaryType: (link.supplier.types && link.supplier.types[0]) ?? null,
-          country: link.supplier.country
+          id: link.supplierCounterparty.id,
+          name: link.supplierCounterparty.name,
+          code: link.supplierCounterparty.code,
+          roles: link.supplierCounterparty.roles ?? [],
+          primaryType:
+            (link.supplierCounterparty.roles &&
+              link.supplierCounterparty.roles[0]) ??
+            null,
+          country: link.supplierCounterparty.Country
             ? {
-                id: link.supplier.country.id,
-                code: link.supplier.country.code,
-                name: link.supplier.country.name,
+                id: link.supplierCounterparty.Country.id,
+                code: link.supplierCounterparty.Country.code,
+                name: link.supplierCounterparty.Country.name,
               }
             : null,
         },
@@ -175,20 +159,13 @@ export class ScmProductsService {
         internalName: dto.internalName,
         sku: dto.sku,
         brandId: dto.brandId,
-        type: dto.type || 'PURCHASED',
+        itemId: dto.itemId,
+        type: dto.type ?? ScmProductType.PURCHASED,
         baseDescription: dto.baseDescription,
         composition: dto.composition,
-        netWeightGrams: dto.netWeightGrams,
-        grossWeightGrams: dto.grossWeightGrams,
-        lengthMm: dto.lengthMm,
-        widthMm: dto.widthMm,
-        heightMm: dto.heightMm,
-        barcode: dto.barcode,
-        countryOfOriginCode: dto.countryOfOriginCode,
-        technicalAttributes: dto.technicalAttributes ? (dto.technicalAttributes as any) : undefined,
       },
       include: {
-        brand: {
+        Brand: {
           select: {
             id: true,
             name: true,
@@ -231,9 +208,9 @@ export class ScmProductsService {
 
     if (dto.brandId !== undefined) {
       if (dto.brandId === null) {
-        updateData.brand = { disconnect: true };
+        updateData.Brand = { disconnect: true };
       } else {
-        updateData.brand = { connect: { id: dto.brandId } };
+        updateData.Brand = { connect: { id: dto.brandId } };
       }
     }
 
@@ -249,11 +226,19 @@ export class ScmProductsService {
       updateData.composition = dto.composition;
     }
 
+    if (dto.itemId !== undefined) {
+      if (dto.itemId === null) {
+        updateData.MdmItem = { disconnect: true };
+      } else {
+        updateData.MdmItem = { connect: { id: dto.itemId } };
+      }
+    }
+
     return this.prisma.scmProduct.update({
       where: { id },
       data: updateData,
       include: {
-        brand: {
+        Brand: {
           select: {
             id: true,
             name: true,
@@ -267,23 +252,21 @@ export class ScmProductsService {
   async remove(id: string) {
     const product = await this.prisma.scmProduct.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            products: true,
-          },
-        },
-      },
     });
 
     if (!product) {
       throw new NotFoundException(`SCM product with ID ${id} not found`);
     }
 
-    if (product._count.products > 0) {
-      throw new BadRequestException(
-        `Cannot delete SCM product: it has ${product._count.products} associated listing(s)`,
-      );
+    if (product.itemId) {
+      const listingsCount = await this.prisma.bcmListingProfile.count({
+        where: { itemId: product.itemId },
+      });
+      if (listingsCount > 0) {
+        throw new BadRequestException(
+          `Cannot delete SCM product: its MDM item has ${listingsCount} associated listing(s)`,
+        );
+      }
     }
 
     return this.prisma.scmProduct.delete({
@@ -291,4 +274,3 @@ export class ScmProductsService {
     });
   }
 }
-

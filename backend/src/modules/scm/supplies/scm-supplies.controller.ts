@@ -27,9 +27,11 @@ import { CreateScmSupplyItemDto } from './dto/create-scm-supply-item.dto';
 import { UpdateScmSupplyItemDto } from './dto/update-scm-supply-item.dto';
 import { FilterScmSuppliesDto } from './dto/filter-scm-supplies.dto';
 import { ConfirmSupplyReceiveDto } from './dto/confirm-receive.dto';
+import { PartialSupplyReceiveDto } from './dto/partial-receive.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { ScmSupplyStatus } from '@prisma/client';
 
 @ApiTags('scm/supplies')
 @Controller('scm/supplies')
@@ -42,7 +44,7 @@ export class ScmSuppliesController {
   @Roles('Admin', 'Manager')
   @ApiOperation({ summary: 'Get list of supplies' })
   @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'supplierId', required: false })
+  @ApiQuery({ name: 'supplierCounterpartyId', required: false })
   @ApiQuery({ name: 'warehouseId', required: false })
   @ApiQuery({ name: 'productionOrderId', required: false })
   @ApiResponse({ status: 200, description: 'List of supplies' })
@@ -68,7 +70,10 @@ export class ScmSuppliesController {
   @Roles('Admin', 'Manager')
   @ApiOperation({ summary: 'Get supply details with financial documents' })
   @ApiParam({ name: 'id', description: 'Supply ID' })
-  @ApiResponse({ status: 200, description: 'Supply details with financial documents' })
+  @ApiResponse({
+    status: 200,
+    description: 'Supply details with financial documents',
+  })
   @ApiResponse({ status: 404, description: 'Supply not found' })
   @ApiCookieAuth()
   async findOneWithFinance(@Param('id') id: string) {
@@ -114,11 +119,27 @@ export class ScmSuppliesController {
   })
   @ApiResponse({ status: 404, description: 'Supply not found' })
   @ApiCookieAuth()
-  async update(
-    @Param('id') id: string,
-    @Body() updateDto: UpdateScmSupplyDto,
-  ) {
+  async update(@Param('id') id: string, @Body() updateDto: UpdateScmSupplyDto) {
     return this.scmSuppliesService.update(id, updateDto);
+  }
+
+  @Post(':id/transition')
+  @UseGuards(RolesGuard)
+  @Roles('Admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Transition supply status via state machine' })
+  @ApiParam({ name: 'id', description: 'Supply ID' })
+  @ApiResponse({ status: 200, description: 'Supply status updated' })
+  @ApiResponse({ status: 400, description: 'Invalid transition' })
+  @ApiResponse({ status: 404, description: 'Supply not found' })
+  @ApiCookieAuth()
+  async transition(
+    @Param('id') id: string,
+    @Body() body: { targetStatus: ScmSupplyStatus; reason?: string },
+  ) {
+    return this.scmSuppliesService.transitionStatus(id, body.targetStatus, {
+      reason: body.reason,
+    });
   }
 
   @Patch(':id/status')
@@ -143,6 +164,20 @@ export class ScmSuppliesController {
     return this.scmSuppliesService.changeStatus(id, updateDto);
   }
 
+  @Post(':id/receive-partial')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Partially receive supply items' })
+  @ApiParam({ name: 'id', description: 'Supply ID' })
+  @ApiCookieAuth()
+  async partialReceive(
+    @Param('id') id: string,
+    @Body() dto: PartialSupplyReceiveDto,
+  ) {
+    return this.scmSuppliesService.partialReceive(id, dto);
+  }
+
   @Post(':supplyId/items')
   @UseGuards(RolesGuard)
   @Roles('Admin')
@@ -155,7 +190,10 @@ export class ScmSuppliesController {
     status: 201,
     description: 'The item has been successfully added.',
   })
-  @ApiResponse({ status: 404, description: 'Supply or supplier item not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Supply or supplier item not found',
+  })
   @ApiCookieAuth()
   async createItem(
     @Param('supplyId') supplyId: string,
@@ -233,4 +271,3 @@ export class ScmSuppliesController {
     return this.scmSuppliesService.confirmReceive(supplyId, dto);
   }
 }
-

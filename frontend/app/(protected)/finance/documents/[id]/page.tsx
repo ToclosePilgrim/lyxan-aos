@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MainLayout } from "@/components/main-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,174 +16,128 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/api";
 import { toast } from "sonner";
 import Link from "next/link";
 import { format } from "date-fns";
 
-interface FinancialDocument {
+interface FinancialDocumentData {
   id: string;
-  docNumber: string | null;
-  docDate: string | null;
-  type: string | null;
-  direction: string | null;
-  status: string | null;
-  totalAmount?: number;
-  amountTotal?: number;
-  amountPaid?: number;
-  currency: string | null;
+  type: "SUPPLY_INVOICE" | "PRODUCTION_INVOICE" | "SERVICE_INVOICE" | "INVOICE" | "ACT" | "OTHER";
+  status: "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+  number: string;
+  date: string;
+  issueDate: string | null;
   dueDate: string | null;
+  paidDate: string | null;
+  supplierId: string | null;
   supplier: {
     id: string;
     name: string;
     code: string;
   } | null;
+  totalAmount: number;
+  amountPaid: number;
+  currency: string;
+  productionOrderId: string | null;
   productionOrder: {
     id: string;
     code: string;
     name: string;
   } | null;
-  scmSupply: {
+  supplyId: string | null;
+  supply: {
     id: string;
     code: string;
   } | null;
-  externalId: string | null;
-  fileUrl: string | null;
-  notes: string | null;
-  services?: Array<{
+  services: Array<{
     id: string;
     category: string;
     name: string;
-    supplier: {
-      id: string;
-      name: string;
-      code: string;
-    } | null;
+    supplier: { id: string; name: string; code: string } | null;
     totalAmount: number;
     currency: string;
+    productionOrder: { id: string; code: string; name: string } | null;
+    supply: { id: string; code: string } | null;
   }>;
+  comment: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-interface Supplier {
-  id: string;
-  name: string;
-  code: string;
-}
-
-interface ProductionOrder {
-  id: string;
-  code: string;
-  name: string;
-}
-
-interface ScmSupply {
-  id: string;
-  code: string;
-}
-
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  INVOICE: "Invoice",
-  BILL: "Bill",
-  ACT: "Act",
-  CREDIT_NOTE: "Credit Note",
-  OTHER: "Other",
-};
-
-const DOCUMENT_DIRECTION_LABELS: Record<string, string> = {
-  INCOMING: "Incoming",
-  OUTGOING: "Outgoing",
-};
-
-const DOCUMENT_STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-500",
-  SENT: "bg-blue-500",
   ISSUED: "bg-blue-500",
   PARTIALLY_PAID: "bg-yellow-500",
   PAID: "bg-green-500",
   CANCELLED: "bg-red-500",
 };
 
-const DOCUMENT_STATUSES = [
-  { value: "DRAFT", label: "Draft" },
-  { value: "SENT", label: "Sent" },
-  { value: "PARTIALLY_PAID", label: "Partially Paid" },
-  { value: "PAID", label: "Paid" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
-
-const CURRENCIES = ["RUB", "USD", "EUR", "CNY"];
+const TYPE_LABELS: Record<string, string> = {
+  SUPPLY_INVOICE: "Supply Invoice",
+  PRODUCTION_INVOICE: "Production Invoice",
+  SERVICE_INVOICE: "Service Invoice",
+  INVOICE: "Invoice",
+  ACT: "Act",
+  OTHER: "Other",
+};
 
 export default function FinancialDocumentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const documentId = params.id as string;
-
-  const [document, setDocument] = useState<FinancialDocument | null>(null);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
-  const [supplies, setSupplies] = useState<ScmSupply[]>([]);
+  const [documentData, setDocumentData] = useState<FinancialDocumentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   const [formData, setFormData] = useState({
-    docNumber: "",
-    docDate: "",
-    type: "INVOICE",
-    direction: "INCOMING",
-    status: "DRAFT",
-    currency: "RUB",
-    amountTotal: "",
-    amountPaid: "",
+    status: "DRAFT" as string,
+    issueDate: "",
     dueDate: "",
-    supplierId: "",
-    productionOrderId: "",
-    scmSupplyId: "",
-    externalId: "",
-    fileUrl: "",
-    notes: "",
+    paidDate: "",
+    totalAmount: "",
+    amountPaid: "",
+    comment: "",
   });
 
   useEffect(() => {
     if (documentId) {
       loadDocument();
-      Promise.all([loadSuppliers(), loadProductionOrders(), loadSupplies()]);
     }
   }, [documentId]);
 
   const loadDocument = async () => {
     try {
       setLoading(true);
-      const data = await apiRequest<FinancialDocument>(`/finance/documents/${documentId}`);
-      setDocument(data);
+      const data = await apiRequest<FinancialDocumentData>(
+        `/finance/documents/${documentId}`
+      );
+      setDocumentData(data);
       setFormData({
-        docNumber: data.docNumber || "",
-        docDate: data.docDate ? format(new Date(data.docDate), "yyyy-MM-dd") : "",
-        type: data.type || "INVOICE",
-        direction: data.direction || "INCOMING",
-        status: data.status || "DRAFT",
-        currency: data.currency || "RUB",
-        amountTotal: (data.totalAmount ?? data.amountTotal ?? 0).toString(),
-        amountPaid: (data.amountPaid ?? 0).toString(),
-        dueDate: data.dueDate ? format(new Date(data.dueDate), "yyyy-MM-dd") : "",
-        supplierId: data.supplier?.id || "",
-        productionOrderId: data.productionOrder?.id || "",
-        scmSupplyId: data.scmSupply?.id || "",
-        externalId: data.externalId || "",
-        fileUrl: data.fileUrl || "",
-        notes: data.notes || "",
+        status: data.status,
+        issueDate: data.issueDate
+          ? format(new Date(data.issueDate), "yyyy-MM-dd")
+          : data.date
+            ? format(new Date(data.date), "yyyy-MM-dd")
+            : "",
+        dueDate: data.dueDate
+          ? format(new Date(data.dueDate), "yyyy-MM-dd")
+          : "",
+        paidDate: data.paidDate
+          ? format(new Date(data.paidDate), "yyyy-MM-dd")
+          : "",
+        totalAmount: data.totalAmount.toString(),
+        amountPaid: (data.amountPaid || 0).toString(),
+        comment: data.comment || "",
       });
     } catch (error) {
       console.error("Failed to load financial document:", error);
@@ -194,99 +148,55 @@ export default function FinancialDocumentDetailPage() {
     }
   };
 
-  const loadSuppliers = async () => {
-    try {
-      const data = await apiRequest<Supplier[]>("/scm/suppliers?status=ACTIVE&limit=100");
-      setSuppliers(Array.isArray(data) ? data.filter(s => s?.id) : []);
-    } catch (error) {
-      console.error("Failed to load suppliers:", error);
-      setSuppliers([]);
-    }
-  };
-
-  const loadProductionOrders = async () => {
-    try {
-      const data = await apiRequest<ProductionOrder[]>("/scm/production-orders");
-      setProductionOrders(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Failed to load production orders:", error);
-    }
-  };
-
-  const loadSupplies = async () => {
-    try {
-      const data = await apiRequest<ScmSupply[]>("/scm/supplies");
-      setSupplies(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Failed to load supplies:", error);
-    }
-  };
-
   const handleSave = async () => {
-    if (!document) return;
+    if (!documentData) return;
 
     try {
       setSaving(true);
       const payload: any = {};
 
-      if (formData.docNumber !== document.docNumber) payload.docNumber = formData.docNumber;
-      if (formData.docDate !== (document.docDate ? format(new Date(document.docDate), "yyyy-MM-dd") : "")) {
-        payload.docDate = formData.docDate ? new Date(formData.docDate).toISOString() : null;
+      if (formData.status !== documentData.status) {
+        payload.status = formData.status;
       }
-      if (formData.type !== document.type) payload.type = formData.type;
-      if (formData.direction !== document.direction) payload.direction = formData.direction;
-      if (formData.status !== document.status) payload.status = formData.status;
-      if (formData.currency !== document.currency) payload.currency = formData.currency;
-      if (formData.amountTotal !== document.totalAmount?.toString()) {
-        payload.amountTotal = formData.amountTotal ? parseFloat(formData.amountTotal) : 0;
+      const currentIssueDate = documentData.issueDate
+        ? format(new Date(documentData.issueDate), "yyyy-MM-dd")
+        : documentData.date
+          ? format(new Date(documentData.date), "yyyy-MM-dd")
+          : "";
+      if (formData.issueDate !== currentIssueDate) {
+        payload.issueDate = formData.issueDate || null;
       }
-      if (formData.amountPaid !== document.amountPaid?.toString()) {
-        payload.amountPaid = formData.amountPaid ? parseFloat(formData.amountPaid) : 0;
+      if (formData.dueDate !== (documentData.dueDate ? format(new Date(documentData.dueDate), "yyyy-MM-dd") : "")) {
+        payload.dueDate = formData.dueDate || null;
       }
-      if (formData.dueDate !== (document.dueDate ? format(new Date(document.dueDate), "yyyy-MM-dd") : "")) {
-        payload.dueDate = formData.dueDate ? new Date(formData.dueDate).toISOString() : null;
+      if (formData.paidDate !== (documentData.paidDate ? format(new Date(documentData.paidDate), "yyyy-MM-dd") : "")) {
+        payload.paidDate = formData.paidDate || null;
       }
-      if (formData.supplierId !== (document.supplier?.id || "")) {
-        payload.supplierId = formData.supplierId || null;
+      if (formData.totalAmount !== documentData.totalAmount.toString()) {
+        payload.totalAmount = parseFloat(formData.totalAmount);
       }
-      if (formData.productionOrderId !== (document.productionOrder?.id || "")) {
-        payload.productionOrderId = formData.productionOrderId || null;
+      if (formData.amountPaid !== (documentData.amountPaid || 0).toString()) {
+        payload.amountPaid = parseFloat(formData.amountPaid) || 0;
       }
-      if (formData.scmSupplyId !== (document.scmSupply?.id || "")) {
-        payload.scmSupplyId = formData.scmSupplyId || null;
+      if (formData.comment !== (documentData.comment || "")) {
+        payload.comment = formData.comment || null;
       }
-      if (formData.externalId !== document.externalId) payload.externalId = formData.externalId;
-      if (formData.fileUrl !== document.fileUrl) payload.fileUrl = formData.fileUrl;
-      if (formData.notes !== document.notes) payload.notes = formData.notes;
 
       await apiRequest(`/finance/documents/${documentId}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
+
       toast.success("Financial document updated successfully");
       setIsEditing(false);
       await loadDocument();
     } catch (error: any) {
       console.error("Failed to update financial document:", error);
-      toast.error(error.message || "Failed to update financial document");
+      toast.error("Failed to update financial document", {
+        description: error.message || "Unknown error",
+      });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      setDeleting(true);
-      await apiRequest(`/finance/documents/${documentId}`, {
-        method: "DELETE",
-      });
-      toast.success("Financial document deleted successfully");
-      router.push("/finance/documents");
-    } catch (error: any) {
-      console.error("Failed to delete financial document:", error);
-      toast.error(error.message || "Failed to delete financial document");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -299,11 +209,6 @@ export default function FinancialDocumentDetailPage() {
     }
   };
 
-  const formatAmount = (amount: number | null | undefined, currency: string | null | undefined) => {
-    if (amount === null || amount === undefined || isNaN(amount)) return "-";
-    return `${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ""}`;
-  };
-
   if (loading) {
     return (
       <MainLayout>
@@ -312,10 +217,12 @@ export default function FinancialDocumentDetailPage() {
     );
   }
 
-  if (!document) {
+  if (!documentData) {
     return (
       <MainLayout>
-        <div className="text-center py-8 text-muted-foreground">Document not found.</div>
+        <div className="text-center py-8 text-muted-foreground">
+          Financial document not found
+        </div>
       </MainLayout>
     );
   }
@@ -336,34 +243,11 @@ export default function FinancialDocumentDetailPage() {
                   Cancel
                 </Button>
                 <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving..." : "Save Changes"}
+                  {saving ? "Saving..." : "Save"}
                 </Button>
               </>
             ) : (
-              <>
-                <Button variant="outline" onClick={() => setIsEditing(true)}>
-                  Edit
-                </Button>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="destructive">Delete</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Delete Financial Document</DialogTitle>
-                      <DialogDescription>
-                        Are you sure you want to delete this financial document? This action cannot be undone.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <Button variant="outline">Cancel</Button>
-                      <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-                        {deleting ? "Deleting..." : "Delete"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </>
+              <Button onClick={() => setIsEditing(true)}>Edit</Button>
             )}
           </div>
         </div>
@@ -371,350 +255,263 @@ export default function FinancialDocumentDetailPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Financial Document: {document.docNumber || "N/A"}</CardTitle>
-              <Badge className={DOCUMENT_STATUS_COLORS[document.status || "DRAFT"]}>
-                {document.status || "DRAFT"}
+              <div>
+                <CardTitle>
+                  {TYPE_LABELS[documentData.type]}: {documentData.number}
+                </CardTitle>
+                <CardDescription>ID: {documentData.id}</CardDescription>
+              </div>
+              <Badge className={STATUS_COLORS[documentData.status] || "bg-gray-500"}>
+                {documentData.status}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Basic Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Document Type</Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.type}
-                      onValueChange={(value) => setFormData({ ...formData, type: value })}
-                      disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="INVOICE">Invoice</SelectItem>
-                        <SelectItem value="BILL">Bill</SelectItem>
-                        <SelectItem value="ACT">Act</SelectItem>
-                        <SelectItem value="CREDIT_NOTE">Credit Note</SelectItem>
-                        <SelectItem value="OTHER">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm">{DOCUMENT_TYPE_LABELS[document.type || "OTHER"] || document.type || "-"}</p>
-                  )}
+                  <Label>Date</Label>
+                  <p className="text-sm font-medium">{formatDate(documentData.date)}</p>
                 </div>
                 <div>
-                  <Label>Direction</Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.direction}
-                      onValueChange={(value) => setFormData({ ...formData, direction: value })}
-                      disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="INCOMING">Incoming</SelectItem>
-                        <SelectItem value="OUTGOING">Outgoing</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm">{DOCUMENT_DIRECTION_LABELS[document.direction || ""] || document.direction || "-"}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value })}
-                      disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOCUMENT_STATUSES.map((status) => (
-                          <SelectItem key={status.value} value={status.value}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm">{document.status || "-"}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Document Number</Label>
+                  <Label htmlFor="issueDate">Issue Date</Label>
                   {isEditing ? (
                     <Input
-                      value={formData.docNumber}
-                      onChange={(e) => setFormData({ ...formData, docNumber: e.target.value })}
-                      disabled={saving}
-                    />
-                  ) : (
-                    <p className="text-sm">{document.docNumber || "-"}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>Document Date</Label>
-                  {isEditing ? (
-                    <Input
+                      id="issueDate"
                       type="date"
-                      value={formData.docDate}
-                      onChange={(e) => setFormData({ ...formData, docDate: e.target.value })}
+                      value={formData.issueDate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, issueDate: e.target.value })
+                      }
                       disabled={saving}
                     />
                   ) : (
-                    <p className="text-sm">{formatDate(document.docDate)}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Amounts</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label>Currency</Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.currency}
-                      onValueChange={(value) => setFormData({ ...formData, currency: value })}
-                      disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((currency) => (
-                          <SelectItem key={currency} value={currency}>
-                            {currency}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm">{document.currency || "-"}</p>
+                    <p className="text-sm">
+                      {formatDate(documentData.issueDate || documentData.date)}
+                    </p>
                   )}
                 </div>
                 <div>
-                  <Label>Total Amount</Label>
+                  <Label htmlFor="dueDate">Due Date</Label>
                   {isEditing ? (
                     <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.amountTotal}
-                      onChange={(e) => setFormData({ ...formData, amountTotal: e.target.value })}
+                      id="dueDate"
+                      type="date"
+                      value={formData.dueDate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, dueDate: e.target.value })
+                      }
                       disabled={saving}
                     />
                   ) : (
-                    <p className="text-sm">{formatAmount(document.totalAmount ?? document.amountTotal ?? null, document.currency ?? null)}</p>
+                    <p className="text-sm">{formatDate(documentData.dueDate)}</p>
                   )}
                 </div>
                 <div>
-                  <Label>Paid Amount</Label>
+                  <Label htmlFor="paidDate">Paid Date</Label>
                   {isEditing ? (
                     <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.amountPaid}
-                      onChange={(e) => setFormData({ ...formData, amountPaid: e.target.value })}
+                      id="paidDate"
+                      type="date"
+                      value={formData.paidDate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, paidDate: e.target.value })
+                      }
                       disabled={saving}
                     />
                   ) : (
-                    <p className="text-sm">{formatAmount(document.amountPaid ?? null, document.currency ?? null)}</p>
+                    <p className="text-sm">{formatDate(documentData.paidDate)}</p>
                   )}
                 </div>
               </div>
-              <div>
-                <Label>Due Date</Label>
-                {isEditing ? (
-                  <Input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                    disabled={saving}
-                  />
-                ) : (
-                  <p className="text-sm">{formatDate(document.dueDate)}</p>
-                )}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Links</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Supplier</Label>
-                  {isEditing ? (
-                    <Select
-                      value={formData.supplierId ?? ""}
-                      onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
-                      disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select supplier" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">None</SelectItem>
-                        {suppliers.filter(s => s?.id).map((supplier) => (
-                          <SelectItem key={supplier.id} value={String(supplier.id)}>
-                            {supplier.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm">{document.supplier?.name || "-"}</p>
-                  )}
+                  <p className="text-sm font-medium">
+                    {documentData.supplier?.name || "-"}
+                  </p>
                 </div>
                 <div>
-                  <Label>Production Order</Label>
+                  <Label htmlFor="totalAmount">Total Amount</Label>
                   {isEditing ? (
-                    <Select
-                      value={formData.productionOrderId ?? ""}
-                      onValueChange={(value) => setFormData({ ...formData, productionOrderId: value })}
+                    <Input
+                      id="totalAmount"
+                      type="number"
+                      step="0.01"
+                      value={formData.totalAmount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, totalAmount: e.target.value })
+                      }
                       disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select production order" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">None</SelectItem>
-                        {productionOrders.filter(o => o?.id).map((order) => (
-                          <SelectItem key={order.id} value={String(order.id)}>
-                            {order.code}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   ) : (
-                    <p className="text-sm">
-                      {document.productionOrder ? (
-                        <Link href={`/scm/production-orders/${document.productionOrder.id}`} className="text-blue-600 hover:underline">
-                          {document.productionOrder.code}
-                        </Link>
-                      ) : "-"}
+                    <p className="text-sm font-medium">
+                      {documentData.totalAmount.toLocaleString()} {documentData.currency}
                     </p>
                   )}
                 </div>
                 <div>
-                  <Label>Supply</Label>
+                  <Label htmlFor="amountPaid">Amount Paid</Label>
                   {isEditing ? (
-                    <Select
-                      value={formData.scmSupplyId ?? ""}
-                      onValueChange={(value) => setFormData({ ...formData, scmSupplyId: value })}
+                    <Input
+                      id="amountPaid"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.amountPaid}
+                      onChange={(e) =>
+                        setFormData({ ...formData, amountPaid: e.target.value })
+                      }
                       disabled={saving}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select supply" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">None</SelectItem>
-                        {supplies.filter(s => s?.id).map((supply) => (
-                          <SelectItem key={supply.id} value={String(supply.id)}>
-                            {supply.code}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   ) : (
-                    <p className="text-sm">
-                      {document.scmSupply ? (
-                        <Link href={`/scm/supplies/${document.scmSupply.id}`} className="text-blue-600 hover:underline">
-                          {document.scmSupply.code}
-                        </Link>
-                      ) : "-"}
+                    <p className="text-sm font-medium">
+                      {documentData.amountPaid.toLocaleString()} {documentData.currency}
                     </p>
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Other</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>External ID</Label>
-                  {isEditing ? (
-                    <Input
-                      value={formData.externalId}
-                      onChange={(e) => setFormData({ ...formData, externalId: e.target.value })}
-                      disabled={saving}
-                    />
-                  ) : (
-                    <p className="text-sm">{document.externalId || "-"}</p>
-                  )}
-                </div>
-                <div>
-                  <Label>File URL</Label>
-                  {isEditing ? (
-                    <Input
-                      value={formData.fileUrl}
-                      onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
-                      disabled={saving}
-                    />
-                  ) : (
+              <div>
+                <Label htmlFor="status">Status</Label>
+                {isEditing ? (
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, status: value })
+                    }
+                    disabled={saving}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DRAFT">DRAFT</SelectItem>
+                      <SelectItem value="ISSUED">ISSUED</SelectItem>
+                      <SelectItem value="PARTIALLY_PAID">PARTIALLY_PAID</SelectItem>
+                      <SelectItem value="PAID">PAID</SelectItem>
+                      <SelectItem value="CANCELLED">CANCELLED</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm">{documentData.status}</p>
+                )}
+              </div>
+
+              <div>
+                <Label>Linked To</Label>
+                <div className="space-y-2">
+                  {documentData.productionOrder ? (
                     <p className="text-sm">
-                      {document.fileUrl ? (
-                        <a href={document.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          View file
-                        </a>
-                      ) : "-"}
+                      Production Order:{" "}
+                      <Link
+                        href={`/scm/production-orders/${documentData.productionOrder.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {documentData.productionOrder.code} - {documentData.productionOrder.name}
+                      </Link>
                     </p>
+                  ) : null}
+                  {documentData.supply ? (
+                    <p className="text-sm">
+                      Supply:{" "}
+                      <Link
+                        href={`/scm/supplies/${documentData.supply.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {documentData.supply.code}
+                      </Link>
+                    </p>
+                  ) : null}
+                  {!documentData.productionOrder && !documentData.supply && (
+                    <p className="text-sm text-muted-foreground">Not linked to any order or supply</p>
                   )}
                 </div>
               </div>
+
               <div>
-                <Label>Notes</Label>
+                <Label htmlFor="comment">Comment</Label>
                 {isEditing ? (
                   <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    id="comment"
+                    value={formData.comment}
+                    onChange={(e) =>
+                      setFormData({ ...formData, comment: e.target.value })
+                    }
                     rows={3}
                     disabled={saving}
                   />
                 ) : (
-                  <p className="text-sm whitespace-pre-wrap">{document.notes || "-"}</p>
+                  <p className="text-sm whitespace-pre-wrap">{documentData.comment || "-"}</p>
                 )}
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {document.services && document.services.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Linked Services ({document.services.length})</h3>
-                <div className="border rounded-md p-4 space-y-2">
-                  {document.services.map((service) => (
-                    <div key={service.id} className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">{service.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {service.supplier?.name || "N/A"} • {service.category}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{formatAmount(service.totalAmount ?? null, service.currency ?? null)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Attached Services</CardTitle>
+            <CardDescription>
+              {documentData.services.length} service(s) attached to this document
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {documentData.services.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No services attached to this document.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Currency</TableHead>
+                      <TableHead>Linked To</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {documentData.services.map((service) => (
+                      <TableRow key={service.id}>
+                        <TableCell>{service.category}</TableCell>
+                        <TableCell className="font-medium">{service.name}</TableCell>
+                        <TableCell>{service.supplier?.name || "-"}</TableCell>
+                        <TableCell>{service.totalAmount.toLocaleString()}</TableCell>
+                        <TableCell>{service.currency}</TableCell>
+                        <TableCell>
+                          {service.productionOrder ? (
+                            <Link
+                              href={`/scm/production-orders/${service.productionOrder.id}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {service.productionOrder.code}
+                            </Link>
+                          ) : service.supply ? (
+                            <Link
+                              href={`/scm/supplies/${service.supply.id}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {service.supply.code}
+                            </Link>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
-
-            <div className="border-t pt-4 text-sm text-muted-foreground">
-              <p>Created: {formatDate(document.createdAt)}</p>
-              <p>Updated: {formatDate(document.updatedAt)}</p>
-            </div>
           </CardContent>
         </Card>
       </div>
     </MainLayout>
   );
 }
+

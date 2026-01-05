@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -54,4 +60,3 @@ export class WarehouseFiltersDto {
   @Min(0)
   offset?: number;
 }
-

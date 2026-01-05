@@ -1,4 +1,6 @@
-import { IsString, IsOptional, IsNumber, Min, MaxLength, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, MaxLength, IsBoolean } from 'class-validator';
+
+// LEGACY DTO: legacy Product/Sku model. Deprecated, do not use in new code.
 
 export class UpdateProductDto {
   @IsOptional()
@@ -77,6 +79,3 @@ export class UpdateProductDto {
   @IsBoolean()
   aiContentEnabled?: boolean;
 }
-
-
-

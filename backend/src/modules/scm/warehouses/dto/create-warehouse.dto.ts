@@ -42,11 +42,11 @@ export class CreateWarehouseDto {
 
   @ApiProperty({
     description: 'Country ID',
-    required: false,
+    required: true,
   })
-  @IsOptional()
   @IsString()
-  countryId?: string;
+  @IsNotEmpty()
+  countryId: string;
 
   @ApiProperty({
     description: 'City',
@@ -81,4 +81,3 @@ export class CreateWarehouseDto {
   @IsString()
   notes?: string;
 }
-

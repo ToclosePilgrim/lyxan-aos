@@ -113,6 +113,3 @@ export class CreateScmServiceDto {
   comment?: string;
 }
 
-
-
-

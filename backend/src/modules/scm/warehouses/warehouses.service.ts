@@ -51,7 +51,7 @@ export class WarehousesService {
       this.prisma.warehouse.findMany({
         where,
         include: {
-          country: {
+          Country: {
             select: {
               id: true,
               name: true,
@@ -60,8 +60,8 @@ export class WarehousesService {
           },
           _count: {
             select: {
-              stocks: true,
-              supplies: true,
+              ScmStock: true,
+              ScmSupply: true,
             },
           },
         },
@@ -81,15 +81,15 @@ export class WarehousesService {
         code: warehouse.code,
         type: warehouse.type,
         countryId: warehouse.countryId,
-        country: warehouse.country,
+        country: (warehouse as any).Country,
         city: warehouse.city,
         address: warehouse.address,
         isActive: warehouse.isActive,
         notes: warehouse.notes,
         createdAt: warehouse.createdAt,
         updatedAt: warehouse.updatedAt,
-        stocksCount: warehouse._count.stocks,
-        suppliesCount: warehouse._count.supplies,
+        stocksCount: (warehouse as any)._count?.ScmStock ?? 0,
+        suppliesCount: (warehouse as any)._count?.ScmSupply ?? 0,
       })),
       total,
     };
@@ -99,7 +99,7 @@ export class WarehousesService {
     const warehouse = await this.prisma.warehouse.findUnique({
       where: { id },
       include: {
-        country: {
+        Country: {
           select: {
             id: true,
             name: true,
@@ -108,8 +108,8 @@ export class WarehousesService {
         },
         _count: {
           select: {
-            stocks: true,
-            supplies: true,
+            ScmStock: true,
+            ScmSupply: true,
           },
         },
       },
@@ -125,15 +125,33 @@ export class WarehousesService {
       code: warehouse.code,
       type: warehouse.type,
       countryId: warehouse.countryId,
-      country: warehouse.country,
+      country: (warehouse as any).Country,
       city: warehouse.city,
       address: warehouse.address,
       isActive: warehouse.isActive,
       notes: warehouse.notes,
       createdAt: warehouse.createdAt,
       updatedAt: warehouse.updatedAt,
-      stocksCount: warehouse._count.stocks,
-      suppliesCount: warehouse._count.supplies,
+      stocksCount: (warehouse as any)._count?.ScmStock ?? 0,
+      suppliesCount: (warehouse as any)._count?.ScmSupply ?? 0,
+    };
+  }
+
+  async checkCodeAvailability(code: string) {
+    const trimmed = code?.trim();
+
+    if (!trimmed) {
+      throw new BadRequestException('Code is required');
+    }
+
+    const existing = await this.prisma.warehouse.findUnique({
+      where: { code: trimmed },
+      select: { id: true },
+    });
+
+    return {
+      isAvailable: !existing,
+      existingId: existing?.id ?? null,
     };
   }
 
@@ -163,18 +181,20 @@ export class WarehousesService {
     });
 
     if (existing) {
-      throw new BadRequestException(`Warehouse with code ${code} already exists`);
+      throw new BadRequestException(
+        `Warehouse with code ${code} already exists`,
+      );
     }
 
-    // Validate country if provided
-    if (dto.countryId) {
-      const country = await this.prisma.country.findUnique({
-        where: { id: dto.countryId },
-      });
-
-      if (!country) {
-        throw new NotFoundException(`Country with ID ${dto.countryId} not found`);
-      }
+    // Country is required (C.1)
+    if (!dto.countryId) {
+      throw new BadRequestException('countryId is required');
+    }
+    const country = await this.prisma.country.findUnique({
+      where: { id: dto.countryId },
+    });
+    if (!country) {
+      throw new NotFoundException(`Country with ID ${dto.countryId} not found`);
     }
 
     return this.prisma.warehouse.create({
@@ -189,7 +209,7 @@ export class WarehousesService {
         notes: dto.notes,
       },
       include: {
-        country: {
+        Country: {
           select: {
             id: true,
             name: true,
@@ -216,7 +236,9 @@ export class WarehousesService {
       });
 
       if (existing) {
-        throw new BadRequestException(`Warehouse with code ${dto.code} already exists`);
+        throw new BadRequestException(
+          `Warehouse with code ${dto.code} already exists`,
+        );
       }
     }
 
@@ -227,7 +249,9 @@ export class WarehousesService {
       });
 
       if (!country) {
-        throw new NotFoundException(`Country with ID ${dto.countryId} not found`);
+        throw new NotFoundException(
+          `Country with ID ${dto.countryId} not found`,
+        );
       }
     }
 
@@ -244,7 +268,7 @@ export class WarehousesService {
         notes: dto.notes,
       },
       include: {
-        country: {
+        Country: {
           select: {
             id: true,
             name: true,
@@ -271,7 +295,7 @@ export class WarehousesService {
         isActive: false,
       },
       include: {
-        country: {
+        Country: {
           select: {
             id: true,
             name: true,
@@ -282,4 +306,3 @@ export class WarehousesService {
     });
   }
 }
-

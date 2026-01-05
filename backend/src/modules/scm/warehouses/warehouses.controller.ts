@@ -35,7 +35,9 @@ export class WarehousesController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Manager')
-  @ApiOperation({ summary: 'Get list of warehouses with filters and pagination' })
+  @ApiOperation({
+    summary: 'Get list of warehouses with filters and pagination',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of warehouses with total count',
@@ -43,6 +45,19 @@ export class WarehousesController {
   @ApiCookieAuth()
   async findAll(@Query() filters: WarehouseFiltersDto) {
     return this.warehousesService.findAll(filters);
+  }
+
+  @Get('check-code')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'Manager')
+  @ApiOperation({ summary: 'Check if a warehouse code is available' })
+  @ApiResponse({
+    status: 200,
+    description: 'Code availability result',
+  })
+  @ApiCookieAuth()
+  async checkCode(@Query('code') code: string) {
+    return this.warehousesService.checkCodeAvailability(code);
   }
 
   @Get(':id')
@@ -86,10 +101,7 @@ export class WarehousesController {
   })
   @ApiResponse({ status: 404, description: 'Warehouse not found' })
   @ApiCookieAuth()
-  async update(
-    @Param('id') id: string,
-    @Body() updateDto: UpdateWarehouseDto,
-  ) {
+  async update(@Param('id') id: string, @Body() updateDto: UpdateWarehouseDto) {
     return this.warehousesService.update(id, updateDto);
   }
 
@@ -104,10 +116,12 @@ export class WarehousesController {
     description: 'The warehouse has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Warehouse not found' })
-  @ApiResponse({ status: 400, description: 'Cannot delete warehouse with dependencies' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete warehouse with dependencies',
+  })
   @ApiCookieAuth()
   async remove(@Param('id') id: string) {
     return this.warehousesService.remove(id);
   }
 }
-

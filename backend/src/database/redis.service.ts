@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
@@ -17,7 +22,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const redisUrl = configService.get<string>('REDIS_URL', 'redis://localhost:6379');
+    const redisUrl = configService.get<string>(
+      'REDIS_URL',
+      'redis://localhost:6379',
+    );
     this.client = new Redis(redisUrl, {
       retryStrategy: (times) => {
         // В test режиме не пытаемся переподключаться
@@ -31,7 +39,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       enableOfflineQueue: !this.isTestMode, // Отключаем очередь оффлайн запросов в test режиме
       lazyConnect: false,
     });
-    
+
     this.client.on('connect', () => {
       this.logger.log('Connecting to Redis...');
     });
@@ -86,4 +94,3 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 }
-

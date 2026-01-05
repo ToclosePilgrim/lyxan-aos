@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -12,137 +13,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/api";
-import { format } from "date-fns";
-import Link from "next/link";
 
 interface Stock {
   id: string;
-  warehouseId: string;
-  warehouse: {
-    id: string;
-    name: string;
-    code: string;
-    type: string;
-  };
-  scmProductId: string | null;
-  scmProduct: {
-    id: string;
-    internalName: string;
-    sku: string | null;
-  } | null;
-  supplierItemId: string | null;
-  supplierItem: {
-    id: string;
-    name: string;
-    code: string;
-    type: string;
-    category: string;
-    unit: string;
-    supplier: {
-      id: string;
-      name: string;
-      code: string;
-    };
-  } | null;
-  quantity: number;
-  unit: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Warehouse {
-  id: string;
-  name: string;
-  code: string;
-  type: string;
-}
-
-interface InventoryBalance {
-  id: string;
-  warehouseId: string;
-  productId: string | null;
-  product: {
-    id: string;
-    name: string;
-  } | null;
-  supplierItemId: string | null;
-  supplierItem: {
-    id: string;
-    name: string;
-    code: string;
-    type: string;
-    category: string;
-    unit: string;
-    supplier: {
-      id: string;
-      name: string;
-      code: string;
-    };
-  } | null;
+  skuId: string;
+  skuCode: string;
+  skuName: string | null;
+  productName: string;
+  productBrand: string;
   quantity: number;
   updatedAt: string;
 }
-
-const WAREHOUSE_TYPE_LABELS: Record<string, string> = {
-  MAIN: "Main",
-  PRODUCTION: "Production",
-  STORAGE: "Storage",
-  TEMPORARY: "Temporary",
-};
 
 export default function StocksPage() {
   const [stocks, setStocks] = useState<Stock[]>([]);
-  const [inventoryBalances, setInventoryBalances] = useState<InventoryBalance[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("ALL");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>("scm-stocks");
+  const [editingStock, setEditingStock] = useState<string | null>(null);
+  const [editQuantity, setEditQuantity] = useState<number>(0);
 
   useEffect(() => {
-    loadWarehouses();
+    loadStocks();
   }, []);
-
-  useEffect(() => {
-    if (activeTab === "scm-stocks") {
-      loadStocks();
-    } else if (activeTab === "inventory" && selectedWarehouseId !== "ALL") {
-      loadInventoryBalances();
-    }
-  }, [selectedWarehouseId, activeTab]);
-
-  const loadWarehouses = async () => {
-    try {
-      const data = await apiRequest<{ items: Warehouse[]; total: number }>(
-        "/scm/warehouses?isActive=true&limit=100"
-      );
-      setWarehouses(Array.isArray(data.items) ? data.items.filter(w => w?.id) : []);
-    } catch (error) {
-      console.error("Failed to load warehouses:", error);
-      setWarehouses([]);
-    }
-  };
 
   const loadStocks = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (selectedWarehouseId !== "ALL") {
-        params.append("warehouseId", selectedWarehouseId);
-      }
-      const queryString = params.toString();
-      const url = `/scm/stocks${queryString ? `?${queryString}` : ""}`;
-      const data = await apiRequest<Stock[]>(url);
-      setStocks(Array.isArray(data) ? data : []);
+      const data = await apiRequest<Stock[]>(`/scm/stocks`);
+      setStocks(data || []);
     } catch (error) {
       console.error("Failed to load stocks:", error);
       setStocks([]);
@@ -151,214 +49,127 @@ export default function StocksPage() {
     }
   };
 
-  const loadInventoryBalances = async () => {
-    if (selectedWarehouseId === "ALL") {
-      setInventoryBalances([]);
-      return;
-    }
+  const handleEdit = (stock: Stock) => {
+    setEditingStock(stock.skuId);
+    setEditQuantity(stock.quantity);
+  };
 
+  const handleSave = async (skuId: string) => {
     try {
-      setLoading(true);
-      const data = await apiRequest<InventoryBalance[]>(
-        `/inventory/warehouses/${selectedWarehouseId}/balances`
-      );
-      setInventoryBalances(Array.isArray(data) ? data : []);
+      await apiRequest(`/scm/stocks/${skuId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ quantity: editQuantity }),
+      });
+      setEditingStock(null);
+      loadStocks();
     } catch (error) {
-      console.error("Failed to load inventory balances:", error);
-      setInventoryBalances([]);
-    } finally {
-      setLoading(false);
+      console.error("Failed to update stock:", error);
+      alert("Ошибка при обновлении остатка");
     }
   };
 
-  const getProductName = (stock: Stock): string => {
-    if (stock.scmProduct) {
-      return stock.scmProduct.internalName + (stock.scmProduct.sku ? ` [${stock.scmProduct.sku}]` : "");
-    }
-    if (stock.supplierItem) {
-      return stock.supplierItem.name + (stock.supplierItem.code ? ` [${stock.supplierItem.code}]` : "");
-    }
-    return "Unknown";
-  };
-
-  const getInventoryItemName = (balance: InventoryBalance): string => {
-    if (balance.product) {
-      return balance.product.name;
-    }
-    if (balance.supplierItem) {
-      return `${balance.supplierItem.name} [${balance.supplierItem.code}]`;
-    }
-    return "Unknown";
+  const handleCancel = () => {
+    setEditingStock(null);
+    setEditQuantity(0);
   };
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Stocks</h1>
-            <p className="text-muted-foreground mt-2">
-              Manage warehouse inventory
-            </p>
-          </div>
-          <Link href="/scm/warehouses" className="text-sm text-muted-foreground hover:text-foreground">
-            Manage Warehouses
-          </Link>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Stocks</h1>
+          <p className="text-muted-foreground mt-2">
+            Управление остатками на складе
+          </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="scm-stocks">SCM Stocks</TabsTrigger>
-            <TabsTrigger value="inventory">Inventory Balances</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="scm-stocks">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Current Stock</CardTitle>
-                  <div className="flex gap-2">
-                    <Select
-                      value={selectedWarehouseId}
-                      onValueChange={setSelectedWarehouseId}
-                    >
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select Warehouse" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">All Warehouses</SelectItem>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>
-                            {warehouse.code} — {warehouse.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : stocks.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No stocks found for the selected criteria.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product / Item</TableHead>
-                        {selectedWarehouseId === "ALL" && (
-                          <TableHead>Warehouse</TableHead>
+        <Card>
+          <CardHeader>
+            <CardTitle>Остатки</CardTitle>
+            <CardDescription>
+              {stocks.length} позиций
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8">Загрузка...</div>
+            ) : stocks.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Остатки не найдены
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Товар</TableHead>
+                    <TableHead>Бренд</TableHead>
+                    <TableHead>Количество</TableHead>
+                    <TableHead>Обновлено</TableHead>
+                    <TableHead>Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stocks.map((stock) => (
+                    <TableRow key={stock.id}>
+                      <TableCell className="font-medium">
+                        {stock.skuCode}
+                      </TableCell>
+                      <TableCell>{stock.productName}</TableCell>
+                      <TableCell>{stock.productBrand}</TableCell>
+                      <TableCell>
+                        {editingStock === stock.skuId ? (
+                          <Input
+                            type="number"
+                            value={editQuantity}
+                            onChange={(e) =>
+                              setEditQuantity(parseInt(e.target.value) || 0)
+                            }
+                            className="w-24"
+                          />
+                        ) : (
+                          stock.quantity
                         )}
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead>Last Updated</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stocks.map((stock) => (
-                        <TableRow key={stock.id}>
-                          <TableCell className="font-medium">
-                            {getProductName(stock)}
-                          </TableCell>
-                          {selectedWarehouseId === "ALL" && (
-                            <TableCell>
-                              <Badge variant="outline">
-                                {stock.warehouse.name} (
-                                {WAREHOUSE_TYPE_LABELS[stock.warehouse.type] || stock.warehouse.type})
-                              </Badge>
-                            </TableCell>
-                          )}
-                          <TableCell>{stock.quantity}</TableCell>
-                          <TableCell>{stock.unit}</TableCell>
-                          <TableCell>
-                            {format(new Date(stock.updatedAt), "PPP p")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="inventory">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Inventory Balances</CardTitle>
-                  <Select
-                    value={selectedWarehouseId}
-                    onValueChange={setSelectedWarehouseId}
-                  >
-                    <SelectTrigger className="w-[250px]">
-                      <SelectValue placeholder="Select Warehouse" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                          {warehouse.name} ({WAREHOUSE_TYPE_LABELS[warehouse.type] || warehouse.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <CardDescription>
-                  Current inventory balances by warehouse
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {selectedWarehouseId === "ALL" ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Please select a warehouse to view inventory balances.
-                  </div>
-                ) : loading ? (
-                  <div className="text-center py-8">Loading...</div>
-                ) : inventoryBalances.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No inventory balances found for this warehouse.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product / Item</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead>Last Updated</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inventoryBalances.map((balance) => (
-                        <TableRow key={balance.id}>
-                          <TableCell className="font-medium">
-                            {getInventoryItemName(balance)}
-                            {balance.supplierItem && (
-                              <div className="text-sm text-muted-foreground">
-                                Supplier: {balance.supplierItem.supplier.name}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>{balance.quantity}</TableCell>
-                          <TableCell>
-                            {balance.supplierItem?.unit || "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            {format(new Date(balance.updatedAt), "PPP p")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(stock.updatedAt).toLocaleDateString("ru-RU")}
+                      </TableCell>
+                      <TableCell>
+                        {editingStock === stock.skuId ? (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSave(stock.skuId)}
+                            >
+                              Сохранить
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancel}
+                            >
+                              Отмена
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(stock)}
+                          >
+                            Изменить
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   );
 }
+

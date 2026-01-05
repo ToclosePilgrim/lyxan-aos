@@ -17,7 +17,7 @@ describe('AppController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    
+
     // Настройки из main.ts
     app.setGlobalPrefix('api');
     app.enableCors({
@@ -34,7 +34,7 @@ describe('AppController (e2e)', () => {
     );
     app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalInterceptors(new LoggingInterceptor());
-    
+
     await app.init();
   });
 
@@ -43,8 +43,6 @@ describe('AppController (e2e)', () => {
   });
 
   it('/api/auth/me (GET) should return 401 unauthorized by default', () => {
-    return request(app.getHttpServer())
-      .get('/api/auth/me')
-      .expect(401);
+    return request(app.getHttpServer()).get('/api/auth/me').expect(401);
   });
 });

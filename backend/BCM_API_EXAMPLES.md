@@ -152,3 +152,23 @@ curl -X PATCH http://localhost:3001/api/bcm/products/product-id/card \
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

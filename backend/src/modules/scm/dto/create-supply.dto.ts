@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// LEGACY DTO: legacy Supply/SupplyItem model. Deprecated, do not use in new code.
 export class SupplyItemDto {
   @IsString()
   @IsNotEmpty()
@@ -26,10 +27,3 @@ export class CreateSupplyDto {
   @Type(() => SupplyItemDto)
   items: SupplyItemDto[];
 }
-
-
-
-
-
-
-

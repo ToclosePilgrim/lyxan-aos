@@ -19,9 +19,3 @@ export class CreateTicketDto {
   text: string;
 }
 
-
-
-
-
-
-

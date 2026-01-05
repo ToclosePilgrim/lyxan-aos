@@ -1,67 +1,44 @@
-import { IsOptional, IsString, IsNotEmpty, IsEnum, IsNumber, IsObject } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 import { ScmProductType } from '@prisma/client';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateScmProductDto {
+  @ApiProperty({ description: 'Internal name', example: 'Vimty Retinol 30ml' })
   @IsString()
   @IsNotEmpty()
-  internalName: string; // единственное обязательное поле
+  internalName: string;
 
+  @ApiProperty({ description: 'SKU (optional)', required: false })
   @IsOptional()
   @IsString()
   sku?: string;
 
+  @ApiProperty({ description: 'Brand ID (optional)', required: false })
   @IsOptional()
   @IsString()
-  brandId?: string; // ВАЖНО: только IsString, НИКАКИХ IsUUID
+  brandId?: string;
 
+  @ApiProperty({
+    description:
+      'Produced MDM item ID (optional). If set, links ScmProduct -> MdmItem.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  itemId?: string;
+
+  @ApiProperty({ description: 'Product type (optional)', required: false })
   @IsOptional()
   @IsEnum(ScmProductType)
   type?: ScmProductType;
 
+  @ApiProperty({ description: 'Base description (optional)', required: false })
   @IsOptional()
   @IsString()
   baseDescription?: string;
 
+  @ApiProperty({ description: 'Composition (optional)', required: false })
   @IsOptional()
   @IsString()
   composition?: string;
-
-  @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  netWeightGrams?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  grossWeightGrams?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  lengthMm?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  widthMm?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Type(() => Number)
-  heightMm?: number;
-
-  @IsOptional()
-  @IsString()
-  barcode?: string;
-
-  @IsOptional()
-  @IsString()
-  countryOfOriginCode?: string;
-
-  @IsOptional()
-  @IsObject()
-  technicalAttributes?: Record<string, unknown>;
 }
-

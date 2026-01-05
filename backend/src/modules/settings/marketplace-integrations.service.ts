@@ -112,7 +112,9 @@ export class MarketplaceIntegrationsService {
     });
 
     if (!integration) {
-      throw new NotFoundException(`Marketplace integration with ID ${id} not found`);
+      throw new NotFoundException(
+        `Marketplace integration with ID ${id} not found`,
+      );
     }
 
     return {
@@ -139,7 +141,9 @@ export class MarketplaceIntegrationsService {
     });
 
     if (!marketplace) {
-      throw new NotFoundException(`Marketplace with ID ${dto.marketplaceId} not found`);
+      throw new NotFoundException(
+        `Marketplace with ID ${dto.marketplaceId} not found`,
+      );
     }
 
     // Get brand
@@ -263,7 +267,9 @@ export class MarketplaceIntegrationsService {
     });
 
     if (!integration) {
-      throw new NotFoundException(`Marketplace integration with ID ${id} not found`);
+      throw new NotFoundException(
+        `Marketplace integration with ID ${id} not found`,
+      );
     }
 
     const updateData: Prisma.MarketplaceIntegrationUpdateInput = {};
@@ -362,7 +368,9 @@ export class MarketplaceIntegrationsService {
     });
 
     if (!integration) {
-      throw new NotFoundException(`Marketplace integration with ID ${id} not found`);
+      throw new NotFoundException(
+        `Marketplace integration with ID ${id} not found`,
+      );
     }
 
     // Use credentials from DTO if provided, otherwise use saved credentials from DB
@@ -477,16 +485,19 @@ export class MarketplaceIntegrationsService {
     });
 
     // Log test connection success
-    await this.integrationLogs.info('Marketplace integration testConnection success', {
-      source: LogSource.MARKETPLACE_INTEGRATION,
-      integrationId: integration.id,
-      details: {
-        status: 'ACTIVE',
-        marketplaceCode: integration.marketplace?.code,
-        sellerBaseUrl: OZON_SELLER_BASE_URL,
-        performanceBaseUrl: OZON_PERFORMANCE_BASE_URL,
+    await this.integrationLogs.info(
+      'Marketplace integration testConnection success',
+      {
+        source: LogSource.MARKETPLACE_INTEGRATION,
+        integrationId: integration.id,
+        details: {
+          status: 'ACTIVE',
+          marketplaceCode: integration.marketplace?.code,
+          sellerBaseUrl: OZON_SELLER_BASE_URL,
+          performanceBaseUrl: OZON_PERFORMANCE_BASE_URL,
+        },
       },
-    });
+    );
 
     return {
       ok: true,
@@ -495,4 +506,3 @@ export class MarketplaceIntegrationsService {
     };
   }
 }
-

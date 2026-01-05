@@ -187,3 +187,23 @@ curl -X GET "http://localhost:3001/api/finance/pnl?dateFrom=2025-01-01&dateTo=20
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

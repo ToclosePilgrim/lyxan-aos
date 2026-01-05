@@ -9,6 +9,3 @@ export class RunAgentDto {
   @IsOptional()
   params?: Record<string, unknown>;
 }
-
-
-

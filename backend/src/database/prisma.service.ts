@@ -1,8 +1,16 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(PrismaService.name);
 
   async onModuleInit() {
@@ -25,16 +33,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     process.on('beforeExit', async () => {
       await app.close();
     });
-    
+
     process.on('SIGINT', async () => {
       await app.close();
       process.exit(0);
     });
-    
+
     process.on('SIGTERM', async () => {
       await app.close();
       process.exit(0);
     });
   }
 }
-

@@ -1,16 +1,14 @@
-import { IsString, IsOptional, IsNumber, Min, Max, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateReviewDto {
-  @ApiProperty({
-    description: 'SKU ID (optional)',
-    example: 'sku-id',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  skuId?: string;
-
   @ApiProperty({
     description: 'Rating (1-5)',
     example: 5,
@@ -38,10 +36,3 @@ export class CreateReviewDto {
   @IsDateString()
   date: string;
 }
-
-
-
-
-
-
-

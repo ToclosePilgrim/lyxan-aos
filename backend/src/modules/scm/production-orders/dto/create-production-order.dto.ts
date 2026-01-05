@@ -114,5 +114,38 @@ export class CreateProductionOrderDto {
   @IsOptional()
   @IsString()
   manufacturerId?: string;
-}
 
+  @ApiProperty({
+    description: 'Main warehouse ID (optional)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
+
+  @ApiProperty({
+    description: 'Output warehouse ID (required for start/complete flows)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  outputWarehouseId?: string;
+
+  @ApiProperty({
+    description: 'Produced SCM product ID (optional; defaults to productId)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  producedItemId?: string;
+
+  @ApiProperty({
+    description: 'Produced quantity (optional; defaults to quantityPlanned)',
+    required: false,
+    example: 5000,
+  })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  producedQty?: number;
+}

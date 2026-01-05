@@ -12,12 +12,12 @@ export class FilterScmSuppliesDto {
   status?: string;
 
   @ApiProperty({
-    description: 'Filter by supplier ID',
+    description: 'Filter by supplier counterparty ID',
     required: false,
   })
   @IsOptional()
   @IsString()
-  supplierId?: string;
+  supplierCounterpartyId?: string;
 
   @ApiProperty({
     description: 'Filter by warehouse ID',
@@ -45,4 +45,3 @@ export class FilterScmSuppliesDto {
   @IsString()
   limit?: string;
 }
-

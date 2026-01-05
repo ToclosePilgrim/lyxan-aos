@@ -28,6 +28,3 @@ describe('Enum Contract Tests', () => {
   });
 });
 
-
-
-

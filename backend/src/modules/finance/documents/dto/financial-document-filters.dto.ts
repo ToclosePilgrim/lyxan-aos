@@ -5,7 +5,6 @@ import {
   IsDateString,
   IsInt,
   Min,
-  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -16,6 +15,14 @@ import {
 } from '@prisma/client';
 
 export class FinancialDocumentFiltersDto {
+  @ApiProperty({
+    description: 'Filter by legal entity ID',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  legalEntityId?: string;
+
   @ApiProperty({
     description: 'Filter by document type',
     enum: FinancialDocumentType,
@@ -116,5 +123,13 @@ export class FinancialDocumentFiltersDto {
   @IsOptional()
   @IsString()
   search?: string;
-}
 
+  @ApiProperty({
+    description: 'Accrual status filter',
+    required: false,
+    enum: ['ACCRUED', 'NOT_ACCRUED'],
+  })
+  @IsOptional()
+  @IsString()
+  accrualStatus?: 'ACCRUED' | 'NOT_ACCRUED';
+}

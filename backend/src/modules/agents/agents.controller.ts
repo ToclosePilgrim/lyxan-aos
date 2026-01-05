@@ -46,7 +46,9 @@ export class AgentsController {
   }
 
   @Post('callback/:runId')
-  @ApiOperation({ summary: 'Callback endpoint for n8n to report agent results' })
+  @ApiOperation({
+    summary: 'Callback endpoint for n8n to report agent results',
+  })
   @ApiParam({
     name: 'runId',
     description: 'Agent run ID',

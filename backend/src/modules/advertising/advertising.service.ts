@@ -16,10 +16,7 @@ export class AdvertisingService {
 
   // ============ AdCampaign ============
 
-  async getCampaigns(filters?: {
-    status?: string;
-    search?: string;
-  }) {
+  async getCampaigns(filters?: { status?: string; search?: string }) {
     const where: any = {};
 
     if (filters?.status) {

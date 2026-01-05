@@ -24,6 +24,3 @@ export class UpdateBrandDto {
   @MaxLength(5000)
   toneOfVoice?: string;
 }
-
-
-

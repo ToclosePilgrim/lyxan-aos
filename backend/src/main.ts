@@ -5,15 +5,17 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { PrismaService } from './database/prisma.service';
+import { validateEnvOrThrow } from './config/env';
 
 async function bootstrap() {
+  validateEnvOrThrow();
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
   // Global prefix
-  app.setGlobalPrefix('api');
+  // Expose /health and /health/db without /api prefix for release readiness checks.
+  app.setGlobalPrefix('api', { exclude: ['health', 'health/(.*)'] });
 
   // CORS
   app.enableCors({
@@ -36,8 +38,7 @@ async function bootstrap() {
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Global interceptors
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  // Request logging is handled by requestIdMiddleware (structured logs with requestId)
 
   // Swagger API Documentation
   const config = new DocumentBuilder()
@@ -52,6 +53,30 @@ async function bootstrap() {
   // Graceful shutdown for Prisma
   const prismaService = app.get(PrismaService);
   await prismaService.enableShutdownHooks(app);
+
+  // OS self-validate (optional; avoid static import so broken OS stubs don't break compilation)
+  const mode = configService.get('OS_SELF_VALIDATE_MODE') ?? 'strict';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { OsSelfValidateService } = require('./modules/os/os-self-validate.service');
+    const selfValidate = app.get(OsSelfValidateService);
+    await selfValidate.validateAll();
+  } catch (err: any) {
+    // If module is missing/broken -> treat as "skipped" unless strict
+    const msg = String(err?.message ?? err ?? '');
+    const missingModule =
+      msg.includes('Cannot find module') || msg.includes('MODULE_NOT_FOUND');
+    if (!missingModule) {
+      console.error(
+        '[OS SELF VALIDATE FAILED]',
+        err?.code ?? err?.message,
+        err?.details ?? err,
+      );
+    }
+    if (mode === 'strict' && !missingModule) {
+      process.exit(1);
+    }
+  }
 
   const port = configService.get('PORT', 3001);
   await app.listen(port);

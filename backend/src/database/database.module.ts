@@ -8,9 +8,3 @@ import { PrismaService } from './prisma.service';
 })
 export class DatabaseModule {}
 
-
-
-
-
-
-

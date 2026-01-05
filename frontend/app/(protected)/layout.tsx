@@ -4,6 +4,7 @@ import { useAuth } from "@/context/auth-context";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { TopNav } from "@/components/top-nav";
+import { ScopeProvider } from "@/context/scope-context";
 
 export default function ProtectedLayout({
   children,
@@ -36,19 +37,26 @@ export default function ProtectedLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b bg-background">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="text-lg font-semibold">Ly[x]an AOS</div>
-          <TopNav user={user} />
-        </div>
-      </header>
-      <main className="flex-1 bg-muted/40 p-4">
-        {children}
-      </main>
-    </div>
+    <ScopeProvider>
+      <div className="min-h-screen flex flex-col">
+        <header className="border-b bg-background">
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="text-lg font-semibold">Ly[x]an AOS</div>
+            <TopNav user={user} />
+          </div>
+        </header>
+        <main className="flex-1 bg-muted/40 p-4">{children}</main>
+      </div>
+    </ScopeProvider>
   );
 }
+
+
+
+
+
+
+
 
 
 
