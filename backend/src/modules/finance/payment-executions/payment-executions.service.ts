@@ -26,6 +26,7 @@ import { ACCOUNTING_ACCOUNTS } from '../accounting-accounts.config';
 import { financeConfig } from '../../../config/finance.config';
 import { FinancialDocumentsService } from '../documents/financial-documents.service';
 import { PostingRunsService } from '../posting-runs/posting-runs.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 @Injectable()
 export class PaymentExecutionsService {
@@ -36,6 +37,7 @@ export class PaymentExecutionsService {
     private readonly cashLinks: CashAccountingLinksService,
     private readonly financialDocs: FinancialDocumentsService,
     private readonly postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   private accrualDebitAccount(policy: FinanceCapitalizationPolicy): string {
@@ -250,6 +252,13 @@ export class PaymentExecutionsService {
           },
           postingRunId: run.id,
         }));
+
+      await this.validation.maybeValidateDocumentBalanceOnPost({
+        tx,
+        docType: AccountingDocType.PAYMENT_EXECUTION,
+        docId: paymentExecution.id,
+        postingRunId: run.id,
+      });
 
       await this.cashLinks.link({
         tx,

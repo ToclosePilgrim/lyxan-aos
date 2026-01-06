@@ -1,7 +1,7 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Query, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { PrismaService } from '../../database/prisma.service';
+import { InventoryReportService } from '../inventory/inventory-report.service';
 import { ok, fail, OsApiResponse } from './os-api.types';
 
 @ApiTags('os-inventory')
@@ -9,7 +9,9 @@ import { ok, fail, OsApiResponse } from './os-api.types';
 @UseGuards(JwtAuthGuard)
 @Controller('os/v1/inventory')
 export class OsInventoryController {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(OsInventoryController.name);
+
+  constructor(private readonly report: InventoryReportService) {}
 
   @Get('balances')
   @ApiOperation({ summary: 'Inventory balances (OS API)' })
@@ -29,25 +31,21 @@ export class OsInventoryController {
     }>
   > {
     try {
-      const where: any = {};
-      if (warehouseId) where.warehouseId = warehouseId;
-      if (productId) where.productId = productId;
-      if (supplierItemId) where.supplierItemId = supplierItemId;
-      if (itemId) {
-        where.OR = [{ productId: itemId }, { supplierItemId: itemId }];
-      }
-      const take = Math.min(Number(pageSize) || 50, 200);
-      const skip = ((Number(page) || 1) - 1) * take;
-      const [items, total] = await Promise.all([
-        this.prisma.inventoryBalance.findMany({
-          where,
-          orderBy: { updatedAt: 'desc' },
-          take,
-          skip,
-        }),
-        this.prisma.inventoryBalance.count({ where }),
-      ]);
-      return ok({ items, total, page: Number(page) || 1, pageSize: take });
+      this.logger.warn(
+        'deprecated_endpoint: os/v1/inventory/balances -> use inventory/report/balances (alias via InventoryReportService)',
+      );
+
+      // Backward compatibility for old query params:
+      // InventoryBalance is keyed by (warehouseId, itemId) now; productId/supplierItemId are treated as itemId hints.
+      const effectiveItemId = itemId ?? productId ?? supplierItemId;
+
+      const res = await this.report.getBalances({
+        warehouseId,
+        itemId: effectiveItemId,
+        page: Number(page) || 1,
+        pageSize: Number(pageSize) || 50,
+      });
+      return ok(res);
     } catch (e: any) {
       return fail('BALANCES_FAILED', e?.message ?? 'Failed to fetch balances');
     }
@@ -69,21 +67,23 @@ export class OsInventoryController {
     }>
   > {
     try {
-      const where: any = {};
-      if (warehouseId) where.warehouseId = warehouseId;
-      if (itemId) where.itemId = itemId;
-      const take = Math.min(Number(pageSize) || 50, 200);
-      const skip = ((Number(page) || 1) - 1) * take;
-      const [items, total] = await Promise.all([
-        this.prisma.stockBatch.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take,
-          skip,
-        }),
-        this.prisma.stockBatch.count({ where }),
-      ]);
-      return ok({ items, total, page: Number(page) || 1, pageSize: take });
+      this.logger.warn(
+        'deprecated_endpoint: os/v1/inventory/batches -> use inventory/report/batches (alias via InventoryReportService)',
+      );
+      if (!warehouseId || !itemId) {
+        return fail(
+          'BAD_REQUEST',
+          'warehouseId and itemId are required',
+          { warehouseId: warehouseId ?? null, itemId: itemId ?? null },
+        );
+      }
+      const res = await this.report.getBatches({
+        warehouseId,
+        itemId,
+        page: Number(page) || 1,
+        pageSize: Number(pageSize) || 50,
+      });
+      return ok(res);
     } catch (e: any) {
       return fail('BATCHES_FAILED', e?.message ?? 'Failed to fetch batches');
     }
@@ -107,23 +107,26 @@ export class OsInventoryController {
     }>
   > {
     try {
-      const where: any = {};
-      if (warehouseId) where.warehouseId = warehouseId;
-      if (itemId) where.itemId = itemId;
-      if (docId) where.docId = docId;
-      if (docType) where.docType = docType as any;
-      const take = Math.min(Number(pageSize) || 50, 200);
-      const skip = ((Number(page) || 1) - 1) * take;
-      const [items, total] = await Promise.all([
-        this.prisma.stockMovement.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          take,
-          skip,
-        }),
-        this.prisma.stockMovement.count({ where }),
-      ]);
-      return ok({ items, total, page: Number(page) || 1, pageSize: take });
+      this.logger.warn(
+        'deprecated_endpoint: os/v1/inventory/movements -> use inventory/report/movements (alias via InventoryReportService)',
+      );
+
+      // docId/docType are legacy filters; canonical report supports docType but not docId.
+      // We intentionally ignore docId here to avoid exposing a second-path filtering contract.
+      if (docId) {
+        this.logger.warn(
+          'deprecated_param: os/v1/inventory/movements?docId is ignored; use canonical filters',
+        );
+      }
+
+      const res = await this.report.getMovements({
+        warehouseId,
+        itemId,
+        docType,
+        page: Number(page) || 1,
+        pageSize: Number(pageSize) || 50,
+      });
+      return ok(res);
     } catch (e: any) {
       return fail(
         'MOVEMENTS_FAILED',
@@ -132,4 +135,7 @@ export class OsInventoryController {
     }
   }
 }
+
+
+
 

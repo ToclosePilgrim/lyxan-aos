@@ -1,1 +1,137 @@
+name: Backend CI
 
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: aosdb_test
+          POSTGRES_USER: aos
+          POSTGRES_PASSWORD: aos
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: pnpm exec prisma generate
+      
+      - name: Run database migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+        run: pnpm exec prisma migrate deploy
+      
+      - name: Regenerate Prisma Client after migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+        run: pnpm exec prisma generate
+      
+      - name: Type check
+        working-directory: backend
+        run: pnpm typecheck
+      
+      - name: Lint
+        working-directory: backend
+        run: pnpm lint
+      
+      - name: Run unit tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          REDIS_URL: redis://localhost:6379
+        run: pnpm test
+
+      # TZ 7 guardrail: ALWAYS validate balance on posting, and block unbalanced postings.
+      # Run focused e2e spec to ensure the invariant is enforced on every PR.
+      - name: Run e2e (TZ7 finance balance validation)
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: e2e-test-secret
+        run: pnpm test:e2e -- --runInBand test/finance-balance-validation.e2e-spec.ts
+
+      # TZ 10 guardrail: Sales posting (Revenue + COGS + Inventory links) must remain correct.
+      - name: Run e2e (TZ10 sales posting)
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: e2e-test-secret
+        run: pnpm test:e2e -- --runInBand test/sales-posting.e2e-spec.ts
+
+      # TZ 10.1 guardrail: Sales return with restock must be correct (inventory IN + revenue/COGS reversal + links).
+      - name: Run e2e (TZ10.1 sales return restock)
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: e2e-test-secret
+        run: pnpm test:e2e -- --runInBand test/sales-return-restock.e2e-spec.ts
+
+      # Canon guardrails pack: security-critical + integrity-critical e2e on every PR.
+      - name: Run e2e (Canon guardrails pack: TZ1/TZ2/TZ3/TZ4/TZ5/TZ8)
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          DATABASE_URL: postgresql://aos:aos@localhost:5432/aosdb_test?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: e2e-test-secret
+        run: >
+          pnpm test:e2e -- --runInBand
+          test/agents-callback-hmac.e2e-spec.ts
+          test/scm-supplies-scope.e2e-spec.ts
+          test/finance-entries-scope.e2e-spec.ts
+          test/idempotency.e2e-spec.ts
+          test/supply-receipt-idempotency.e2e-spec.ts
+          test/inventory-events-multiout.e2e-spec.ts
+          test/fifo-mixed-currency-basecost.e2e-spec.ts

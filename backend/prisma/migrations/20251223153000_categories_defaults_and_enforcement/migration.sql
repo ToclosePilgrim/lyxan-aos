@@ -172,3 +172,6 @@ ON CONFLICT ("legalEntityId","sourceType","sourceCode") DO NOTHING;
 
 
 
+
+
+

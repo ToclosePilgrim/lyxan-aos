@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { AccountingDocType, InventoryDirection, Prisma } from '@prisma/client';
 import { FifoInventoryService } from './fifo.service';
 import { InventoryService } from './inventory.service';
@@ -8,6 +8,11 @@ import {
   InventoryDocumentType,
   InventoryMovementType,
 } from './inventory.enums';
+import {
+  buildInventoryTransactionIdempotencyKey,
+  buildStockMovementIdempotencyKey,
+} from './inventory-idempotency.util';
+import { getBaseCurrency } from '../finance/constants';
 
 export interface MovementOperation {
   warehouseId: string;
@@ -44,7 +49,68 @@ export class InventoryOrchestratorService {
     private readonly inventoryEvents: InventoryEventsService,
   ) {}
 
+  private async adjustBalanceWithTx(
+    tx: Prisma.TransactionClient,
+    params: { warehouseId: string; itemId: string; quantityDelta: number },
+  ) {
+    // InventoryBalance is a read-model maintained by canonical inventory services.
+    // Use upsert on the canonical UNIQUE(warehouseId, itemId) to stay race-safe.
+    await (tx as any).inventoryBalance.upsert({
+      where: {
+        warehouseId_itemId: {
+          warehouseId: params.warehouseId,
+          itemId: params.itemId,
+        },
+      },
+      update: {
+        quantity: { increment: params.quantityDelta },
+      },
+      create: {
+        warehouseId: params.warehouseId,
+        itemId: params.itemId,
+        quantity: params.quantityDelta,
+      },
+    });
+  }
+
   async recordIncome(op: MovementOperation, tx: Prisma.TransactionClient) {
+    // Build idempotency keys
+    const txnIdempotencyKey = buildInventoryTransactionIdempotencyKey({
+      sourceDocType: op.docType,
+      sourceDocId: op.docId,
+      operationType: 'IN',
+      lineId: op.meta?.lineId as string | undefined,
+    });
+
+    // Check for existing transaction
+    const existingTxn = await tx.inventoryTransaction.findUnique({
+      where: { idempotencyKey: txnIdempotencyKey },
+      include: {
+        stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: {
+          take: 1,
+        },
+      },
+    });
+
+    if (existingTxn) {
+      // Idempotent: return existing transaction
+      const existingMovement =
+        existingTxn.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions[0];
+      return {
+        movementId: existingMovement?.id ?? null,
+        transactionId: existingTxn.id,
+      };
+    }
+
+    const movementIdempotencyKey = buildStockMovementIdempotencyKey({
+      sourceDocType: op.docType,
+      sourceDocId: op.docId,
+      direction: 'IN',
+      itemId: op.itemId,
+      warehouseId: op.warehouseId,
+      lineId: op.meta?.lineId as string | undefined,
+    });
+
     const income = await this.fifo.recordIncome({
       itemId: op.itemId,
       warehouseId: op.warehouseId,
@@ -60,19 +126,46 @@ export class InventoryOrchestratorService {
       occurredAt: op.occurredAt ?? new Date(),
       breakdown: op.breakdown,
       tx,
+      idempotencyKey: movementIdempotencyKey,
     });
 
-    const txn = await tx.inventoryTransaction.create({
-      data: {
-        warehouseId: op.warehouseId,
-        itemId: op.itemId,
-        quantity: new Prisma.Decimal(op.quantity),
-        direction: InventoryDirection.IN,
-        docType: op.docType,
-        docId: op.docId,
-        stockMovementId: income.id,
-      },
-    });
+    let txn;
+    try {
+      txn = await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: op.warehouseId,
+          itemId: op.itemId,
+          quantity: new Prisma.Decimal(op.quantity),
+          direction: InventoryDirection.IN,
+          docType: op.docType,
+          docId: op.docId,
+          stockMovementId: income.id,
+          idempotencyKey: txnIdempotencyKey,
+        },
+      });
+    } catch (e: any) {
+      // Handle race condition: another request created the transaction
+      if (e?.code === 'P2002') {
+        const again = await tx.inventoryTransaction.findUnique({
+          where: { idempotencyKey: txnIdempotencyKey },
+          include: {
+            stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: {
+              take: 1,
+            },
+          },
+        });
+        if (again) {
+          const existingMovement =
+            again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions[0];
+          return {
+            movementId: existingMovement?.id ?? null,
+            transactionId: again.id,
+          };
+        }
+        throw new ConflictException('Duplicate idempotencyKey for InventoryTransaction');
+      }
+      throw e;
+    }
 
     await tx.stockMovement.update({
       where: { id: income.id },
@@ -83,7 +176,7 @@ export class InventoryOrchestratorService {
       },
     });
 
-    await this.inventory.adjustBalanceWithTx(tx, {
+    await this.adjustBalanceWithTx(tx, {
       warehouseId: op.warehouseId,
       itemId: op.itemId,
       quantityDelta: Number(op.quantity),
@@ -95,14 +188,71 @@ export class InventoryOrchestratorService {
       qtyDelta: Number(op.quantity),
       movementType: op.movementType,
       movementId: income.id,
+      batchId: income.batchId ?? null,
       sourceDocType: op.sourceDocType ?? AccountingDocType.OTHER,
       sourceDocId: op.sourceDocId ?? op.docId,
+      docType: op.docType,
+      docId: op.docId,
+      inventoryTransactionId: txn.id,
+      eventVersion: 1,
     });
 
     return { movementId: income.id, transactionId: txn.id };
   }
 
   async recordOutcome(op: MovementOperation, tx: Prisma.TransactionClient) {
+    // Build idempotency key for transaction
+    const txnIdempotencyKey = buildInventoryTransactionIdempotencyKey({
+      sourceDocType: op.docType,
+      sourceDocId: op.docId,
+      operationType: 'OUT',
+      lineId: op.meta?.lineId as string | undefined,
+    });
+
+    // Check for existing transaction
+    const existingTxn = await tx.inventoryTransaction.findUnique({
+      where: { idempotencyKey: txnIdempotencyKey },
+      include: {
+        stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: {
+          include: { StockBatche: { select: { unitCostBase: true } } },
+        },
+      },
+    });
+
+    if (existingTxn) {
+      // Idempotent: return existing transaction
+      const baseCurrency = getBaseCurrency();
+      const totalCostBase =
+        existingTxn.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.reduce(
+          (sum, m: any) => {
+            const qty = new Prisma.Decimal(m.quantity).abs();
+            const metaLineCostBase =
+              m.meta && typeof (m.meta as any).lineCostBase === 'string'
+                ? new Prisma.Decimal((m.meta as any).lineCostBase)
+                : null;
+            if (metaLineCostBase) return sum.add(metaLineCostBase);
+            const unitCostBase =
+              m.StockBatche?.unitCostBase !== null &&
+              m.StockBatche?.unitCostBase !== undefined
+                ? new Prisma.Decimal(m.StockBatche.unitCostBase)
+                : null;
+            if (!unitCostBase) return sum;
+            return sum.add(unitCostBase.mul(qty));
+          },
+          new Prisma.Decimal(0),
+        );
+      return {
+        movementIds: existingTxn.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.map(
+          (m) => m.id,
+        ),
+        transactionId: existingTxn.id,
+        totalCost: totalCostBase,
+        totalCostBase,
+        currency: baseCurrency,
+        baseCurrency,
+      };
+    }
+
     const outcome = await this.fifo.recordOutcome({
       itemId: op.itemId,
       warehouseId: op.warehouseId,
@@ -112,19 +262,66 @@ export class InventoryOrchestratorService {
       meta: op.meta,
       tx,
       movementType: op.movementType,
+      buildIdempotencyKey: (mv, idx, batchId) =>
+        buildStockMovementIdempotencyKey({
+          sourceDocType: op.docType,
+          sourceDocId: op.docId,
+          direction: 'OUT',
+          itemId: op.itemId,
+          warehouseId: op.warehouseId,
+          batchId: batchId ?? null,
+          partN: idx,
+          lineId: op.meta?.lineId as string | undefined,
+        }),
     });
 
-    const txn = await tx.inventoryTransaction.create({
-      data: {
-        warehouseId: op.warehouseId,
-        itemId: op.itemId,
-        quantity: new Prisma.Decimal(op.quantity),
-        direction: InventoryDirection.OUT,
-        docType: op.docType,
-        docId: op.docId,
-        stockMovementId: outcome.movements[0]?.id ?? null,
-      },
-    });
+    let txn;
+    try {
+      txn = await tx.inventoryTransaction.create({
+        data: {
+          warehouseId: op.warehouseId,
+          itemId: op.itemId,
+          quantity: new Prisma.Decimal(op.quantity),
+          direction: InventoryDirection.OUT,
+          docType: op.docType,
+          docId: op.docId,
+          stockMovementId: outcome.movements[0]?.id ?? null,
+          idempotencyKey: txnIdempotencyKey,
+        },
+      });
+    } catch (e: any) {
+      // Handle race condition: another request created the transaction
+      if (e?.code === 'P2002') {
+        const again = await tx.inventoryTransaction.findUnique({
+          where: { idempotencyKey: txnIdempotencyKey },
+          include: {
+            stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: true,
+          },
+        });
+        if (again) {
+          return {
+            movementIds: again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.map(
+              (m) => m.id,
+            ),
+            transactionId: again.id,
+            totalCost: again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.reduce(
+              (sum, m) => {
+                const cost = m.costPerUnit
+                  ? new Prisma.Decimal(m.costPerUnit).mul(m.quantity.abs())
+                  : new Prisma.Decimal(0);
+                return sum.add(cost);
+              },
+              new Prisma.Decimal(0),
+            ),
+            currency:
+              again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions[0]?.currency ??
+              'RUB',
+          };
+        }
+        throw new ConflictException('Duplicate idempotencyKey for InventoryTransaction');
+      }
+      throw e;
+    }
 
     for (const mv of outcome.movements) {
       await tx.stockMovement.update({
@@ -137,33 +334,43 @@ export class InventoryOrchestratorService {
       });
     }
 
-    await this.inventory.adjustBalanceWithTx(tx, {
+    await this.adjustBalanceWithTx(tx, {
       warehouseId: op.warehouseId,
       itemId: op.itemId,
       quantityDelta: -Number(op.quantity),
     });
 
-    const firstQtyDelta =
-      outcome.movements[0]?.quantity !== undefined &&
-      outcome.movements[0]?.quantity !== null
-        ? Number(outcome.movements[0].quantity)
-        : -Number(op.quantity);
+    // Emit STOCK_CHANGED event for each movement (variant A)
+    // Each event has the same inventoryTransactionId as correlationId
+    for (const mv of outcome.movements) {
+      const qtyDelta =
+        mv.quantity !== undefined && mv.quantity !== null
+          ? Number(mv.quantity) // Already negative for OUT
+          : -Number(op.quantity);
 
-    await this.inventoryEvents.emitStockChanged(tx, {
-      warehouseId: op.warehouseId,
-      itemId: op.itemId,
-      qtyDelta: firstQtyDelta,
-      movementType: op.movementType,
-      movementId: outcome.movements[0]?.id ?? null,
-      sourceDocType: op.sourceDocType ?? AccountingDocType.OTHER,
-      sourceDocId: op.sourceDocId ?? op.docId,
-    });
+      await this.inventoryEvents.emitStockChanged(tx, {
+        warehouseId: op.warehouseId,
+        itemId: op.itemId,
+        qtyDelta: qtyDelta,
+        movementType: op.movementType,
+        movementId: mv.id,
+        batchId: mv.batchId ?? null,
+        sourceDocType: op.sourceDocType ?? AccountingDocType.OTHER,
+        sourceDocId: op.sourceDocId ?? op.docId,
+        docType: op.docType,
+        docId: op.docId,
+        inventoryTransactionId: txn.id,
+        eventVersion: 1,
+      });
+    }
 
     return {
       movementIds: outcome.movements.map((m) => m.id),
       transactionId: txn.id,
       totalCost: outcome.totalCost,
-      currency: outcome.currency,
+      totalCostBase: outcome.totalCostBase,
+      currency: outcome.baseCurrency,
+      baseCurrency: outcome.baseCurrency,
     };
   }
 }

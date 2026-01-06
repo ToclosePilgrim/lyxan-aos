@@ -37,11 +37,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
+    // Extract legalEntityId from JWT payload if present
+    // For MVP: legalEntityId should be in JWT payload (set during login)
+    // Future: could be obtained from user's association with legalEntity through some relation
+    const legalEntityId = payload.legalEntityId ?? null;
+
     return {
       id: user.id,
       email: user.email,
       role: user.role.name,
       roleId: user.roleId,
+      legalEntityId, // Include legalEntityId from JWT payload
     };
   }
 }

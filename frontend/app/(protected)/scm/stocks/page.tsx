@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -29,8 +27,6 @@ interface Stock {
 export default function StocksPage() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingStock, setEditingStock] = useState<string | null>(null);
-  const [editQuantity, setEditQuantity] = useState<number>(0);
 
   useEffect(() => {
     loadStocks();
@@ -47,30 +43,6 @@ export default function StocksPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleEdit = (stock: Stock) => {
-    setEditingStock(stock.skuId);
-    setEditQuantity(stock.quantity);
-  };
-
-  const handleSave = async (skuId: string) => {
-    try {
-      await apiRequest(`/scm/stocks/${skuId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ quantity: editQuantity }),
-      });
-      setEditingStock(null);
-      loadStocks();
-    } catch (error) {
-      console.error("Failed to update stock:", error);
-      alert("Ошибка при обновлении остатка");
-    }
-  };
-
-  const handleCancel = () => {
-    setEditingStock(null);
-    setEditQuantity(0);
   };
 
   return (
@@ -106,7 +78,6 @@ export default function StocksPage() {
                     <TableHead>Бренд</TableHead>
                     <TableHead>Количество</TableHead>
                     <TableHead>Обновлено</TableHead>
-                    <TableHead>Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -117,49 +88,9 @@ export default function StocksPage() {
                       </TableCell>
                       <TableCell>{stock.productName}</TableCell>
                       <TableCell>{stock.productBrand}</TableCell>
-                      <TableCell>
-                        {editingStock === stock.skuId ? (
-                          <Input
-                            type="number"
-                            value={editQuantity}
-                            onChange={(e) =>
-                              setEditQuantity(parseInt(e.target.value) || 0)
-                            }
-                            className="w-24"
-                          />
-                        ) : (
-                          stock.quantity
-                        )}
-                      </TableCell>
+                      <TableCell>{stock.quantity}</TableCell>
                       <TableCell>
                         {new Date(stock.updatedAt).toLocaleDateString("ru-RU")}
-                      </TableCell>
-                      <TableCell>
-                        {editingStock === stock.skuId ? (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleSave(stock.skuId)}
-                            >
-                              Сохранить
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleCancel}
-                            >
-                              Отмена
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEdit(stock)}
-                          >
-                            Изменить
-                          </Button>
-                        )}
                       </TableCell>
                     </TableRow>
                   ))}

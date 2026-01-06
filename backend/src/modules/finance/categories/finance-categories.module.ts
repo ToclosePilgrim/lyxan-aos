@@ -12,3 +12,6 @@ import { FinanceCategoriesService } from './finance-categories.service';
 })
 export class FinanceCategoriesModule {}
 
+
+
+

@@ -1,0 +1,23 @@
+Migrations are immutable
+“Никогда не редактируй существующие файлы в prisma/migrations/<timestamp>/. Любые изменения схемы — только новой миграцией.”
+
+P&L sign rules must be explicit
+“При изменениях в P&L всегда добавляй тест, который фиксирует знак (income = credit−debit, expense = debit−credit).”
+
+If you change accounting logic, add CI guardrail
+“Любая правка проводок/валидаций должна сопровождаться unit/e2e тестом, который запускается в CI.”---
+alwaysApply: true
+---
+
+Single Source of Truth
+“Если появляется второй путь записи/чтения для того же доменного факта — это баг. Всегда переиспользуй каноничный сервис.”
+
+No direct writes to inventory/ledger tables
+“Запрещено писать в inventory/ledger таблицы напрямую вне каноничных сервисов (InventoryOrchestrator/FIFO, AccountingEntryService). Любой обход должен быть удалён или превращён в thin wrapper.”
+
+Every deprecation needs a guardrail
+“При удалении/депрекейте endpoints/модулей — добавь guardrail test или CI check, чтобы второй путь не вернулся.”
+
+Docs Source of Truth
+“Истина только в docs/product, docs/architecture, docs/runbooks. docs/deprecated и docs/_archive нельзя использовать для решений. Если документ помечен DEPRECATED — запрещено использовать как основание для архитектуры/кода. Любая новая SCM/Finance фича должна обновлять SCM_FINANCE_CANON.md (1–3 абзаца).”
+

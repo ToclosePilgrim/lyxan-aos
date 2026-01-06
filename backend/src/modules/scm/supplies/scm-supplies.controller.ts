@@ -31,6 +31,7 @@ import { PartialSupplyReceiveDto } from './dto/partial-receive.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { Idempotency } from '../../../common/idempotency/idempotency.decorator';
 import { ScmSupplyStatus } from '@prisma/client';
 
 @ApiTags('scm/supplies')
@@ -93,6 +94,7 @@ export class ScmSuppliesController {
   }
 
   @Post()
+  @Idempotency({ required: true })
   @UseGuards(RolesGuard)
   @Roles('Admin')
   @HttpCode(HttpStatus.CREATED)
@@ -248,6 +250,7 @@ export class ScmSuppliesController {
   }
 
   @Post(':id/receive')
+  @Idempotency({ required: true })
   @UseGuards(RolesGuard)
   @Roles('Admin')
   @HttpCode(HttpStatus.OK)

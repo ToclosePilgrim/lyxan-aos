@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
+import { ScopeModule } from './common/scope/scope.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -26,7 +28,9 @@ import { ProductionConsumptionsModule } from './modules/scm/production-consumpti
     ConfigModule,
     DatabaseModule,
     HealthModule,
+    IdempotencyModule,
     AuthModule,
+    ScopeModule, // Must be after AuthModule
     UsersModule,
     InventoryModule,
     FinanceModule,

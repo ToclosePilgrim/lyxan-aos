@@ -37,11 +37,26 @@ export class AuthService {
   }
 
   async login(user: User & { role: Role }) {
-    const payload = {
+    // Try to get legalEntityId for the user
+    // For MVP: attempt to get from BrandCountry if user has associated brands
+    // Future: could be from User.legalEntityId if added to schema
+    let legalEntityId: string | null = null;
+    
+    // For MVP: if user is Admin, they might not have a specific legalEntityId
+    // For regular users, we could get it from their associated brands/countries
+    // For now, we'll leave it null and let it be set explicitly in e2e tests
+    // In production, this should be obtained from user's association with legalEntity
+    
+    const payload: any = {
       email: user.email,
       sub: user.id,
       role: user.role.name,
     };
+    
+    // Add legalEntityId to payload if available
+    if (legalEntityId) {
+      payload.legalEntityId = legalEntityId;
+    }
 
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: '15m',

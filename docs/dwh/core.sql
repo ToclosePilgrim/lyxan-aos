@@ -57,3 +57,6 @@ FROM `${BQ_PROJECT_ID}.${BQ_DATASET_RAW}.inventory_balances` bal;
 
 
 
+
+
+

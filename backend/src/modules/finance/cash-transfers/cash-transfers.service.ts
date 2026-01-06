@@ -23,6 +23,7 @@ import { CashAccountingLinksService } from '../cash-accounting-links/cash-accoun
 import { CurrencyRateService } from '../currency-rates/currency-rate.service';
 import { MoneyTransactionsService } from '../money-transactions/money-transactions.service';
 import { PostingRunsService } from '../posting-runs/posting-runs.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 @Injectable()
 export class CashTransfersService {
@@ -33,6 +34,7 @@ export class CashTransfersService {
     private readonly cashLinks: CashAccountingLinksService,
     private readonly moneyTx: MoneyTransactionsService,
     private readonly postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   private getTolerance(amount: Prisma.Decimal): Prisma.Decimal {
@@ -250,6 +252,12 @@ export class CashTransfersService {
         orderBy: [{ lineNumber: 'asc' }],
       });
       if (existingEntries.length) {
+        await this.validation.maybeValidateDocumentBalanceOnPost({
+          tx,
+          docType,
+          docId,
+          postingRunId: run.id,
+        });
         const updated =
           transfer.status === CashTransferStatus.POSTED
             ? transfer
@@ -331,6 +339,13 @@ export class CashTransfersService {
         moneyTransactionId: bankMoneyTx.id,
         accountingEntryId: inEntry.id,
         role: CashAccountingLinkRole.TRANSFER,
+      });
+
+      await this.validation.maybeValidateDocumentBalanceOnPost({
+        tx,
+        docType,
+        docId,
+        postingRunId: run.id,
       });
 
       const updated = await tx.cashTransfer.update({

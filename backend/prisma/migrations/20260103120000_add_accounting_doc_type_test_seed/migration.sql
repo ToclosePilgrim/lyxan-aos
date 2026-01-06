@@ -3,3 +3,6 @@ ALTER TYPE "AccountingDocType" ADD VALUE IF NOT EXISTS 'TEST_SEED';
 
 
 
+
+
+

@@ -1,5 +1,7 @@
 # OS Lifecycle / Status Rules (ТЗ 6.3)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 ## Назначение
 - Формально описать статусы объектов и допустимые действия.
 - Проверять статус перед выполнением действия в OS Router.

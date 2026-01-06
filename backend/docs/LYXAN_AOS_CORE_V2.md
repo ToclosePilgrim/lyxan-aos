@@ -83,3 +83,6 @@ AccountingEntry(debitAccount, creditAccount, amount, currency, docType, docId, c
 
 
 
+
+
+

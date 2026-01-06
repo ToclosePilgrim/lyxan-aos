@@ -1,5 +1,7 @@
 # Architecture Change Requests (ACR)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 This repository enforces certain **domain boundaries** (e.g. MDM ↔ SCM ↔ Finance) via ADRs, contract tests, and guardrail scripts.
 
 If you need to change a boundary, you must do it explicitly via an **Architecture Change Request (ACR)**.
@@ -30,6 +32,9 @@ Create an ACR if your change touches any of the following:
 
 - Link to the ADR(s) affected
 - Link to the ACR PR itself (if this PR is not the ACR PR)
+
+
+
 
 
 

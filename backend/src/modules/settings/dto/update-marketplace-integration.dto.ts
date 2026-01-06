@@ -59,3 +59,6 @@ export class UpdateMarketplaceIntegrationDto {
   ozonPerfClientSecret?: string | null;
 }
 
+
+
+

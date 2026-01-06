@@ -19,6 +19,7 @@ import { CashAccountingLinksService } from '../cash-accounting-links/cash-accoun
 import { ACCOUNTING_ACCOUNTS } from '../accounting-accounts.config';
 import { getNextLineNumber } from '../accounting-entry/accounting-entry.utils';
 import { PostingRunsService } from '../posting-runs/posting-runs.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 @Injectable()
 export class InternalTransfersService {
@@ -27,6 +28,7 @@ export class InternalTransfersService {
     private readonly accountingEntries: AccountingEntryService,
     private readonly cashLinks: CashAccountingLinksService,
     private readonly postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   async postInternalTransfer(input: {
@@ -169,6 +171,13 @@ export class InternalTransfersService {
         moneyTransactionId: inTx.id,
         accountingEntryId: inEntry.id,
         role: CashAccountingLinkRole.TRANSFER,
+      });
+
+      await this.validation.maybeValidateDocumentBalanceOnPost({
+        tx,
+        docType: AccountingDocType.INTERNAL_TRANSFER,
+        docId: transferGroupId,
+        postingRunId: run.id,
       });
 
       return {

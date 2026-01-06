@@ -22,3 +22,6 @@ export function fail(
   return { success: false, error: { code, message, details } };
 }
 
+
+
+

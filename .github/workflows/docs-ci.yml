@@ -1,0 +1,68 @@
+name: Docs CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '.cursor/rules/**'
+      - '.github/workflows/docs-ci.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '.cursor/rules/**'
+      - '.github/workflows/docs-ci.yml'
+
+jobs:
+  docs-guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail if canonical docs reference deprecated docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Allow referencing deprecated docs only inside an explicit "Deprecated" section/title.
+          # MVP guardrail: if a canonical doc references docs/deprecated without mentioning "Deprecated" on that line → fail.
+          matches="$(grep -R "docs/deprecated" docs/architecture docs/product docs/runbooks || true)"
+          if [ -n "${matches}" ]; then
+            bad="$(echo "${matches}" | grep -v -E "(Deprecated|## Deprecated|\\[Deprecated\\])" || true)"
+            if [ -n "${bad}" ]; then
+              echo "Found forbidden references to docs/deprecated inside canonical docs:"
+              echo "${bad}"
+              exit 1
+            fi
+          fi
+
+      - name: Fail if root thin-index docs reference deprecated docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Root docs that remain must not treat deprecated docs as normal references.
+          # (We do not scan docs/_archive by design.)
+          grep -n "docs/deprecated" README.md DEV_GUIDE.md TESTING.md && exit 1 || exit 0
+
+      - name: Guardrail: misspelled Cursor rule must be deprecated and small
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=".cursor/rules/addittional.mdc"
+          if [ ! -f "${f}" ]; then
+            echo "Missing required file: ${f}"
+            exit 1
+          fi
+          if ! grep -q "DEPRECATED" "${f}"; then
+            echo "${f} must contain the string 'DEPRECATED'"
+            exit 1
+          fi
+          lines="$(wc -l < "${f}" | tr -d ' ')"
+          if [ "${lines}" -gt 30 ]; then
+            echo "${f} must have <= 30 lines, got ${lines}"
+            exit 1
+          fi
+
+

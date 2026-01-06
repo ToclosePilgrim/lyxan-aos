@@ -5,3 +5,6 @@ export class UpdateFinancialAccountDto extends PartialType(
   CreateFinancialAccountDto,
 ) {}
 
+
+
+

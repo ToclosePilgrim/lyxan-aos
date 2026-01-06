@@ -16,23 +16,36 @@ export class InventoryEventsService {
       qtyDelta: number;
       movementType: InventoryMovementType;
       movementId: string | null;
+      batchId?: string | null;
       sourceDocType: AccountingDocType;
       sourceDocId: string;
+      docType?: string | null;
+      docId?: string | null;
+      inventoryTransactionId?: string | null;
+      eventVersion?: number;
     },
   ) {
     await this.osEvents.emitEvent(tx, {
       type: OsEventType.INVENTORY_STOCK_CHANGED,
+      version: params.eventVersion ?? 1,
       aggregateType: 'ITEM_IN_WAREHOUSE',
       aggregateId: `${params.warehouseId}:${params.itemId}`,
       source: 'InventoryOrchestrator',
       payload: {
+        eventType: 'STOCK_CHANGED',
+        eventVersion: params.eventVersion ?? 1,
+        occurredAt: new Date().toISOString(),
         warehouseId: params.warehouseId,
         itemId: params.itemId,
+        movementId: params.movementId,
+        batchId: params.batchId ?? null,
         qtyDelta: params.qtyDelta,
         movementType: params.movementType,
-        movementId: params.movementId,
+        docType: params.docType ?? null,
+        docId: params.docId ?? null,
         sourceDocType: params.sourceDocType,
         sourceDocId: params.sourceDocId,
+        inventoryTransactionId: params.inventoryTransactionId ?? null,
       },
     });
   }

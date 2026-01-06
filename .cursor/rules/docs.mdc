@@ -1,0 +1,20 @@
+Docs Source of Truth
+
+- Treat **only** these folders as canonical documentation:
+  - `docs/product/**`
+  - `docs/architecture/**`
+  - `docs/runbooks/**`
+
+- Treat these folders as **non-canonical** (must not be used as a basis for decisions):
+  - `docs/deprecated/**`
+  - `docs/_archive/**`
+
+- If a document is marked **DEPRECATED** (or lives under `docs/deprecated/`), you must not use it as a source for architecture/code changes.
+
+- If you implement a new SCM/Inventory/Finance/Agents invariant or endpoint:
+  - update `docs/architecture/SCM_FINANCE_CANON.md` with 1–3 paragraphs (or a bullet list) describing the change and the invariant it protects.
+
+---
+alwaysApply: true
+---
+

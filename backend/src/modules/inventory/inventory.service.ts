@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   assertRequired,
@@ -58,64 +58,6 @@ export class InventoryService {
         meta: params.meta ? (params.meta as any) : undefined,
       },
     });
-  }
-
-  async adjustBalance(params: {
-    warehouseId: string;
-    itemId: string;
-    quantityDelta: number;
-  }) {
-    return this.adjustBalanceWithTx(this.prisma as any, params);
-  }
-
-  async adjustBalanceWithTx(
-    tx: Prisma.TransactionClient | PrismaService,
-    params: { warehouseId: string; itemId: string; quantityDelta: number },
-  ) {
-    const { warehouseId, itemId, quantityDelta } = params;
-    const existing = await (tx as any).inventoryBalance.findFirst({
-      where: { warehouseId, itemId },
-    });
-    const balance = existing
-      ? await (tx as any).inventoryBalance.update({
-          where: { id: existing.id },
-          data: { quantity: { increment: quantityDelta } },
-        })
-      : await (tx as any).inventoryBalance.create({
-          data: { warehouseId, itemId, quantity: quantityDelta },
-        });
-
-    if (quantityDelta !== 0) {
-      const mdmItem = await (tx as any).mdmItem.findUnique({
-        where: { id: itemId },
-        select: { unit: true },
-      });
-      const unit = mdmItem?.unit ?? 'pcs';
-      const stock = await (tx as any).scmStock.findFirst({
-        where: { warehouseId, itemId },
-        select: { id: true },
-      });
-      if (stock) {
-        await (tx as any).scmStock.update({
-          where: { id: stock.id },
-          data: {
-            quantity: { increment: new Prisma.Decimal(quantityDelta) },
-            unit,
-          },
-        });
-      } else {
-        await (tx as any).scmStock.create({
-          data: {
-            warehouseId,
-            itemId,
-            quantity: new Prisma.Decimal(quantityDelta),
-            unit,
-          },
-        });
-      }
-    }
-
-    return balance;
   }
 
   async getBalanceForWarehouse(warehouseId: string) {

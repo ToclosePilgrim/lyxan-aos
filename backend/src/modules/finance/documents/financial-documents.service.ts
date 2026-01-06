@@ -29,6 +29,7 @@ import { getNextLineNumber } from '../accounting-entry/accounting-entry.utils';
 import { RecurringJournalsService } from '../recurring-journals/recurring-journals.service';
 import { RecurringJournalType } from '@prisma/client';
 import { PostingRunsService } from '../posting-runs/posting-runs.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 @Injectable()
 export class FinancialDocumentsService {
@@ -39,6 +40,7 @@ export class FinancialDocumentsService {
     private categoryResolver: FinanceCategoryResolverService,
     private recurring: RecurringJournalsService,
     private postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   private isPnlImpactingType(
@@ -928,6 +930,13 @@ export class FinancialDocumentsService {
           entries.push(e);
         }
 
+        await this.validation.maybeValidateDocumentBalanceOnPost({
+          tx: client as any,
+          docType: AccountingDocType.FINANCIAL_DOCUMENT_ACCRUAL,
+          docId: doc.id,
+          postingRunId: run.id,
+        });
+
         const updatedDoc = await client.financialDocument.update({
           where: { id: doc.id },
           data: {
@@ -964,6 +973,12 @@ export class FinancialDocumentsService {
       const existingEntries = await client.accountingEntry.findMany({
         where: { postingRunId: run.id } as any,
         orderBy: [{ lineNumber: 'asc' }],
+      });
+      await this.validation.maybeValidateDocumentBalanceOnPost({
+        tx: client as any,
+        docType: AccountingDocType.FINANCIAL_DOCUMENT_ACCRUAL,
+        docId: doc.id,
+        postingRunId: run.id,
       });
       // keep document flags consistent
       if (!(doc as any).isAccrued) {
@@ -1068,6 +1083,13 @@ export class FinancialDocumentsService {
         recognizedFrom: doc.recognizedFrom ?? null,
         recognizedTo: doc.recognizedTo ?? null,
       },
+      postingRunId: run.id,
+    });
+
+    await this.validation.maybeValidateDocumentBalanceOnPost({
+      tx: client as any,
+      docType: AccountingDocType.FINANCIAL_DOCUMENT_ACCRUAL,
+      docId: doc.id,
       postingRunId: run.id,
     });
 

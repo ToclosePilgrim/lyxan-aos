@@ -69,3 +69,6 @@ export class SeedAccountingEntryDto {
   warehouseId?: string | null;
 }
 
+
+
+

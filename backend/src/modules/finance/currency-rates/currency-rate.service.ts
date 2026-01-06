@@ -80,6 +80,24 @@ export class CurrencyRateService {
     });
   }
 
+  async getRateToBase(params: {
+    currency: string;
+    date: Date;
+  }): Promise<Prisma.Decimal> {
+    const baseCurrency = FINANCE_BASE_CURRENCY;
+    if (params.currency?.toUpperCase() === baseCurrency.toUpperCase()) {
+      return new Prisma.Decimal(1);
+    }
+    const rate = await this.getEffectiveRate({
+      currency: params.currency,
+      date: params.date,
+    });
+    if (!rate) {
+      throw new CurrencyRateNotFoundError(params.currency, params.date);
+    }
+    return new Prisma.Decimal(rate.rateToBase);
+  }
+
   async convertToBase(params: {
     amount: Prisma.Decimal | number | string;
     currency: string;
@@ -89,14 +107,11 @@ export class CurrencyRateService {
     if (params.currency?.toUpperCase() === baseCurrency.toUpperCase()) {
       return new Prisma.Decimal(params.amount);
     }
-    const rate = await this.getEffectiveRate({
+    const rateToBase = await this.getRateToBase({
       currency: params.currency,
       date: params.date,
     });
-    if (!rate) {
-      throw new CurrencyRateNotFoundError(params.currency, params.date);
-    }
-    return new Prisma.Decimal(params.amount).mul(rate.rateToBase);
+    return new Prisma.Decimal(params.amount).mul(rateToBase);
   }
 
   async listRates(filter?: {

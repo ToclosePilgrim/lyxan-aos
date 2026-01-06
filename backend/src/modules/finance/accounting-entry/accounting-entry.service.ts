@@ -172,6 +172,10 @@ export class AccountingEntryService {
             : Promise.resolve(true),
         [AccountingDocType.SALES_DOCUMENT]: (id) =>
           client.salesDocument.findUnique({ where: { id } }),
+        [AccountingDocType.SALE_RETURN]: (id) =>
+          (client as any).salesReturnOperation?.findUnique
+            ? (client as any).salesReturnOperation.findUnique({ where: { id } })
+            : Promise.resolve(true),
         [AccountingDocType.SUPPLY]: (id) =>
           client.scmSupply.findUnique({ where: { id } }),
         [AccountingDocType.INVENTORY_ADJUSTMENT]: (id) =>

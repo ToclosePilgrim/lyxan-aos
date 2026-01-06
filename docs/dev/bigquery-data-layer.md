@@ -1,5 +1,9 @@
 # BigQuery Data Layer (RAW → CORE → MARTS)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
+Important: DWH/BI is an **integration layer**. It must not become a runtime Source of Truth for SCM/Inventory/Finance.
+
 ## Архитектура
 - Datasets: `aos_raw`, `aos_core`, `aos_marts`.
 - Источник данных — Postgres (Prisma модели). Обновление инкрементально по `updatedAt` (CDC-подход) или полным дампом при малых объёмах.
@@ -63,6 +67,9 @@ WHERE updatedAt > @last_ts;
 - Только whitelisted таблицы для raw-export.
 - Параметризация SQL в ETL нодах, никаких dynamic SQL из внешнего API.
 - Разделение зон RAW/CORE/MARTS, стабильные схемы и именование.
+
+
+
 
 
 

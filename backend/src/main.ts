@@ -7,6 +7,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaService } from './database/prisma.service';
 import { validateEnvOrThrow } from './config/env';
+import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor';
+import { ScopeInterceptor } from './common/scope/scope.interceptor';
 
 async function bootstrap() {
   validateEnvOrThrow();
@@ -26,6 +28,20 @@ async function bootstrap() {
   // Cookie parser
   app.use(cookieParser());
 
+  // Raw body support for HMAC signature verification and idempotency
+  // Must be before any JSON parsing middleware
+  const expressApp = app.getHttpAdapter().getInstance();
+  const express = require('express');
+  const bodyParser = express.json({
+    verify: (req: any, _res: any, buf: Buffer) => {
+      // Store raw body for all requests (needed for idempotency bodyHash check)
+      req.rawBody = buf;
+    },
+  });
+  
+  // Apply to all routes (NestJS will handle JSON parsing, but we capture rawBody first)
+  expressApp.use(bodyParser);
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -37,6 +53,15 @@ async function bootstrap() {
 
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Global idempotency interceptor
+  const idempotencyInterceptor = app.get(IdempotencyInterceptor);
+  app.useGlobalInterceptors(idempotencyInterceptor);
+
+  // Global scope interceptor (must be after JwtAuthGuard)
+  // This extracts user scope and stores it in AsyncLocalStorage
+  const scopeInterceptor = app.get(ScopeInterceptor);
+  app.useGlobalInterceptors(scopeInterceptor);
 
   // Request logging is handled by requestIdMiddleware (structured logs with requestId)
 

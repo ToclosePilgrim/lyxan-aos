@@ -1,5 +1,7 @@
 # OS Registry (ТЗ 6.1)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 ## Назначение
 - Централизованный реестр доменных объектов и действий (object/action) для OS Router, агентов, будущей генерации UI/доков/прав.
 - Описывает: код объекта, домен, сервис, действия, ограничения, доступность для агентов.
@@ -36,6 +38,9 @@
 
 ## Расширение
 - Добавлять/изменять записи в `OsRegistryService` (seed) и/или в таблицы `os_domain_objects/os_domain_actions` в БД, затем мигрировать Router на чтение из БД.
+
+
+
 
 
 

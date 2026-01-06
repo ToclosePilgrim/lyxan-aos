@@ -7,6 +7,8 @@ import {
   Patch,
   Post,
   Body,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiCookieAuth,
@@ -22,6 +24,8 @@ import { VoidSalesDocumentDto } from './dto/void-sales-document.dto';
 import { CreateSalesDocumentDto } from './dto/create-sales-document.dto';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { Idempotency } from '../../../common/idempotency/idempotency.decorator';
+import { CreateSalesReturnDto } from './dto/create-sales-return.dto';
 
 @ApiTags('finance/sales-documents')
 @Controller('finance/sales-documents')
@@ -111,5 +115,33 @@ export class SalesDocumentsController {
   })
   async repost(@Param('id') id: string, @Body() dto: VoidSalesDocumentDto) {
     return this.salesDocs.repostSalesDocument({ id, reason: dto.reason });
+  }
+
+  @Post(':id/return')
+  @UseGuards(RolesGuard)
+  @Roles('Admin', 'FinanceManager')
+  @Idempotency({ required: true })
+  @ApiOperation({
+    summary:
+      'Return with restock (SALE_RETURN): inventory IN at historical cost + revenue/COGS reversal',
+  })
+  async createReturn(
+    @Param('id') id: string,
+    @Headers('Idempotency-Key') idempotencyKeyHeader: string | undefined,
+    @Body() dto: CreateSalesReturnDto,
+  ) {
+    const idempotencyKey = (idempotencyKeyHeader ?? dto.idempotencyKey ?? '')
+      .trim()
+      .slice(0, 200);
+    if (!idempotencyKey) {
+      throw new BadRequestException('Idempotency-Key header is required');
+    }
+    return this.salesDocs.createReturnWithRestock({
+      saleId: id,
+      idempotencyKey,
+      occurredAt: dto.occurredAt ? new Date(dto.occurredAt) : new Date(),
+      reason: dto.reason ?? null,
+      lines: dto.lines,
+    } as any);
   }
 }

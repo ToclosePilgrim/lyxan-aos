@@ -16,6 +16,7 @@ import { PrismaService } from '../../../database/prisma.service';
 import { AccountingEntryService } from '../accounting-entry/accounting-entry.service';
 import { ACCOUNTING_ACCOUNTS } from '../accounting-accounts.config';
 import { PostingRunsService } from '../posting-runs/posting-runs.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 @Injectable()
 export class AcquiringPostingService {
@@ -23,6 +24,7 @@ export class AcquiringPostingService {
     private readonly prisma: PrismaService,
     private readonly accounting: AccountingEntryService,
     private readonly postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   async postEvent(eventId: string) {
@@ -52,6 +54,12 @@ export class AcquiringPostingService {
         orderBy: [{ lineNumber: 'asc' }],
       });
       if (existingEntries.length) {
+        await this.validation.maybeValidateDocumentBalanceOnPost({
+          tx,
+          docType,
+          docId,
+          postingRunId: run.id,
+        });
         if (event.status !== AcquiringEventStatus.POSTED) {
           await tx.acquiringEvent.update({
             where: { id: event.id },
@@ -161,6 +169,12 @@ export class AcquiringPostingService {
       }
 
       if (event.status !== AcquiringEventStatus.POSTED) {
+        await this.validation.maybeValidateDocumentBalanceOnPost({
+          tx,
+          docType,
+          docId,
+          postingRunId: run.id,
+        });
         await tx.acquiringEvent.update({
           where: { id: event.id },
           data: { status: AcquiringEventStatus.POSTED } as any,

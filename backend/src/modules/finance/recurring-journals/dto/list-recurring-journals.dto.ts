@@ -19,3 +19,6 @@ export class ListRecurringJournalsDto {
   journalType?: RecurringJournalType;
 }
 
+
+
+

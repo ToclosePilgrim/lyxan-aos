@@ -47,3 +47,6 @@ export class ListAccountingEntriesDto {
   limit?: number;
 }
 
+
+
+

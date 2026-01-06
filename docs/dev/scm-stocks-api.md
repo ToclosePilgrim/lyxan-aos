@@ -1,35 +1,29 @@
-# SCM Stocks API (canonical)
+# SCM Stocks API (deprecated alias, current behavior)
 
 ## Назначение
-- Единый публичный API для UI/агентов по остаткам: работает на новом контуре ScmStock + stockMovement + stockBatch (FIFO).
-- Не использовать legacy `Stock` / `sku.stocks` / эндпоинты из `scm.controller.ts`.
-- Низкоуровневый ledger `/inventory/...` — для технических сценариев (глубокие проводки, аудит).
+- Этот модуль **не является SoT** остатков. Он существует как **deprecated read-alias** для совместимости.
+- Канонический SoT по запасам: `StockMovement` + `StockBatch` + `InventoryBalance` (read-model).
+- Канонический документ: `docs/architecture/SCM_FINANCE_CANON.md`.
 
 ## Эндпоинты
 
-- `GET /scm/stocks` — список остатков (ScmStock) с фильтрами `warehouseId`, `supplierItemId`, `scmProductId|productId`, `search`.  
-  Ответ: массив `{ id, warehouse{ id,name,code,type }, scmProduct{ id,internalName,sku }?, supplierItem{ id,name,code,type,category,unit,supplier{...} }?, quantity:number, unit, createdAt, updatedAt }`.
+- `GET /scm/stocks` — read-only выдача остатков по складу (агрегация из каноничных таблиц).
+- `GET /scm/stocks/batches` — read-only выдача партий/остатков (из `StockBatch`/`InventoryBalance`).
+- `GET /scm/stocks/ledger` — read-only движения (из `StockMovement`).
 
-- `GET /scm/stocks/summary` — агрегация по товару/позиции (без разреза по складу).  
-  Ответ: массив `{ supplierItemId?, scmProductId?, totalQuantity:number, supplierItem?, scmProduct? }`.
-
-- `GET /scm/stocks/batches` — остатки по партиям (production batches, FIFO). Фильтры: `warehouseId`, `itemId`, `productId`, `batchCode`, `expirationBefore`, `expirationAfter`, `page`, `pageSize`.  
-  Ответ: `{ items: BatchStockRow[], total }`, где `BatchStockRow` содержит warehouse*, item*, unit, productionBatchId, batchCode, expirationDate, quantity, productionOrderId/code, productId/name/sku.
-
-- `GET /scm/stocks/ledger` — движения (stockMovement) с пагинацией. Query: `warehouseId`, `itemId`, `movementType`, `from`, `to`, `page`, `limit`, `sort`.  
-  Ответ: `{ total, rows: StockMovement[] }` (движения включают warehouse, batch, productionBatch ссылки; docType/docId для supply/transfer/production).
-
-- `POST /scm/stocks/adjust` — ручная корректировка (создаёт movement типа ADJUSTMENT через FIFO движки). Body: `AdjustStockDto` (itemId, warehouseId, quantity, reason, comment, etc.). Требует Admin/Manager.
-
-- `POST /scm/stocks/recalculate` — пересчёт стока/партий из движений (dry-run по умолчанию). Body: `RecalcStockDto` (warehouseId?, itemId?, apply?: boolean). Admin only.
+Write paths:
+- `PATCH /scm/stocks/*` — **запрещено** (должно возвращать 405).
+- `POST /scm/stocks/adjust` — допустимая ручная операция, но внутри должна использовать **каноничный** inventory write-path (orchestrator/FIFO).
 
 ## Граница с /inventory
-- `/scm/stocks*` — бизнесовое представление остатков для UI: агрегированные ScmStock, движения stockMovement, партии stockBatch.
-- `/inventory/...` — технический ledger (InventoryBalance/InventoryTransaction) для глубокой аналитики/интеграций. Использовать только при необходимости низкоуровневой детализации.
+- `/inventory/report/*` — каноничные отчёты/витрины по запасам.
+- `/scm/stocks*` — deprecated alias над каноничными источниками (для совместимости).
 
 ## Legacy
-- Старые эндпоинты `/scm/stocks` в `scm.controller.ts` — LEGACY, не использовать; будут удалены после завершения миграции.
-- В доменных сервисах и UI нельзя рассчитывать остатки как `sku.stocks.quantity`; брать данные только из API выше.
+- Любые документы, описывающие `ScmStock` как SoT, устарели. См. `docs/deprecated/scm-stocks-api.md`.
+
+
+
 
 
 

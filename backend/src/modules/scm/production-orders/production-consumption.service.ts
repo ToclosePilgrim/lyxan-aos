@@ -27,6 +27,7 @@ import {
 } from '../../inventory/inventory.enums';
 import { StockReservationService } from '../../inventory/stock-reservation.service';
 import { MdmItemsService } from '../../mdm/items/mdm-items.service';
+import { getBaseCurrency } from '../../finance/constants';
 import crypto from 'node:crypto';
 
 type Decimalish = Prisma.Decimal | number | string;
@@ -155,7 +156,9 @@ export class ProductionConsumptionService {
         movementIds: string[];
         transactionId: string;
         totalCost: Prisma.Decimal;
+        totalCostBase: Prisma.Decimal;
         currency: string;
+        baseCurrency: string;
       };
 
       try {
@@ -171,6 +174,7 @@ export class ProductionConsumptionService {
               productionOrderId: args.orderId,
               productionOrderItemId: item.id,
               consumptionOperationId: operation.id,
+              lineId: operation.id, // For idempotency key generation (consumptionOperationId)
             },
           },
           client,
@@ -233,8 +237,9 @@ export class ProductionConsumptionService {
           postingDate: new Date(),
           debitAccount: ACCOUNTING_ACCOUNTS.WIP_PRODUCTION,
           creditAccount: ACCOUNTING_ACCOUNTS.INVENTORY_MATERIALS,
-          amount: outcome.totalCost,
-          currency: outcome.currency,
+          // TZ 8: never sum mixed currencies "as-is" — post inventory/COGS in base currency.
+          amount: outcome.totalCostBase,
+          currency: outcome.baseCurrency,
           description: `Production consumption for order ${args.orderId}`,
           metadata: {
             docLineId: `production_consumption:${outcome.transactionId}:materials`,
@@ -242,6 +247,8 @@ export class ProductionConsumptionService {
             productionOrderItemId: item.id,
             itemId: mdmItemId,
             inventoryTransactionId: outcome.transactionId,
+            baseCurrency: outcome.baseCurrency,
+            totalCostBase: outcome.totalCostBase.toString(),
           },
           postingRunId: run.id,
         }));
@@ -596,23 +603,41 @@ export class ProductionConsumptionService {
 
       const movements = await tx.stockMovement.findMany({
         where: { inventoryTransactionId } as any,
-        select: { id: true, quantity: true, costPerUnit: true, currency: true },
+        select: {
+          id: true,
+          quantity: true,
+          batchId: true,
+          meta: true,
+          StockBatche: { select: { unitCostBase: true } },
+        } as any,
       });
       if (!movements.length) {
         throw new BadRequestException(
           'No stock movements found for this inventoryTransactionId',
         );
       }
-      const currency = movements[0].currency ?? 'RUB';
-      let total = new Prisma.Decimal(0);
+      const baseCurrency = getBaseCurrency();
+      let totalBase = new Prisma.Decimal(0);
       for (const mv of movements as any[]) {
         const qty = new Prisma.Decimal(mv.quantity).abs();
-        const cpu = mv.costPerUnit
-          ? new Prisma.Decimal(mv.costPerUnit)
-          : new Prisma.Decimal(0);
-        total = total.add(qty.mul(cpu));
+        const metaLineCostBase =
+          mv.meta && typeof mv.meta.lineCostBase === 'string'
+            ? new Prisma.Decimal(mv.meta.lineCostBase)
+            : null;
+        if (metaLineCostBase) {
+          totalBase = totalBase.add(metaLineCostBase);
+          continue;
+        }
+        const unitCostBase =
+          mv.StockBatche?.unitCostBase !== null &&
+          mv.StockBatche?.unitCostBase !== undefined
+            ? new Prisma.Decimal(mv.StockBatche.unitCostBase)
+            : null;
+        if (unitCostBase) {
+          totalBase = totalBase.add(qty.mul(unitCostBase));
+        }
       }
-      if (total.lte(0))
+      if (totalBase.lte(0))
         throw new BadRequestException('Computed repost amount must be > 0');
 
       const docLineId =
@@ -633,13 +658,16 @@ export class ProductionConsumptionService {
         postingDate: new Date(),
         debitAccount: ACCOUNTING_ACCOUNTS.WIP_PRODUCTION,
         creditAccount: ACCOUNTING_ACCOUNTS.INVENTORY_MATERIALS,
-        amount: total,
-        currency,
+        // TZ 8: repost in base currency only
+        amount: totalBase,
+        currency: baseCurrency,
         description: `Production consumption repost for order ${orderId}`,
         metadata: {
           docLineId,
           productionOrderId: orderId,
           inventoryTransactionId,
+          baseCurrency,
+          totalCostBase: totalBase.toString(),
         },
         postingRunId: repostRun.id,
       });

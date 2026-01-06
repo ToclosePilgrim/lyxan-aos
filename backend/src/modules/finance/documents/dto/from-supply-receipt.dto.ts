@@ -41,3 +41,6 @@ export class FromSupplyReceiptDto {
   currency?: string;
 }
 
+
+
+

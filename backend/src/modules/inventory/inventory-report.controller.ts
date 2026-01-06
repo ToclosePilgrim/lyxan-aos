@@ -25,4 +25,28 @@ export class InventoryReportController {
       pageSize: Number(pageSize) || 50,
     });
   }
+
+  @Get('movements')
+  @ApiOperation({ summary: 'Inventory movements (canonical)' })
+  async movements(
+    @Query('warehouseId') warehouseId?: string,
+    @Query('itemId') itemId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('movementType') movementType?: string,
+    @Query('docType') docType?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.report.getMovements({
+      warehouseId,
+      itemId,
+      dateFrom,
+      dateTo,
+      movementType,
+      docType,
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 50,
+    });
+  }
 }

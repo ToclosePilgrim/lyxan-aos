@@ -236,9 +236,9 @@ export class ProductionOrdersService {
         'Already provisioned; use unprovision first',
       );
     }
-    // Stock validation (minimal): scmStock.quantity >= amount
+    // Stock validation (minimal): inventoryBalance.quantity >= amount
     if (!dto.allowNegativeStock) {
-      const stock = await this.prisma.scmStock.findUnique({
+      const stock = await (this.prisma as any).inventoryBalance.findUnique({
         where: {
           warehouseId_itemId: {
             warehouseId: dto.warehouseId,
@@ -1775,6 +1775,8 @@ export class ProductionOrdersService {
         meta: {
           productionOrderId: orderId,
           batchCode: batch?.batchCode,
+          batchId: batch?.id,
+          lineId: batch?.id ?? orderId, // For idempotency key generation
         },
         breakdown: {
           baseUnitCost: cost.unitCost,

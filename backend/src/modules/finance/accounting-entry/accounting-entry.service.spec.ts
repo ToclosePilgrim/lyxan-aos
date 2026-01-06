@@ -52,6 +52,9 @@ describe('AccountingEntryService (scope C.3)', () => {
   it('uses provided countryId/brandId when present', async () => {
     const prismaMock = {
       accountingEntry: { create: jest.fn().mockResolvedValue({ id: 'e1' }) },
+      brandCountry: {
+        findUnique: jest.fn().mockResolvedValue({ legalEntityId: 'le-1' }),
+      },
     } as unknown as PrismaService;
 
     const ratesMock = {
@@ -92,5 +95,6 @@ describe('AccountingEntryService (scope C.3)', () => {
     const args = (prismaMock as any).accountingEntry.create.mock.calls[0][0];
     expect(args.data.countryId).toBe('c1');
     expect(args.data.brandId).toBe('b1');
+    expect(args.data.legalEntityId).toBe('le-1');
   });
 });

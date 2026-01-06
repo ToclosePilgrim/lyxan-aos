@@ -1,5 +1,7 @@
 # OS Router / Dispatcher
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 ## Запрос
 ```
 POST /os/v1/dispatch

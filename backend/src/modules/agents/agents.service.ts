@@ -4,14 +4,14 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { RunAgentDto } from './dto/run-agent.dto';
 import { AgentCallbackPayload } from './types/agent-callback-payload.interface';
 import { IntegrationLogsService } from '../integration-logs/integration-logs.service';
 import { LogSource } from '@prisma/client';
+import { AgentDispatchService } from './dispatch/agent-dispatch.service';
+import { buildDispatchPayload } from './dispatch/agent-dispatch.processor';
 
 @Injectable()
 export class AgentsService {
@@ -19,8 +19,8 @@ export class AgentsService {
 
   constructor(
     private prisma: PrismaService,
-    private httpService: HttpService,
     private readonly integrationLogs: IntegrationLogsService,
+    private readonly dispatch: AgentDispatchService,
   ) {}
 
   async runAgent(dto: RunAgentDto) {
@@ -35,7 +35,7 @@ export class AgentsService {
       );
     }
 
-    // Create AgentRun with status RUNNING
+    // Create AgentRun with status QUEUED (async dispatch)
     const agentRun = await this.prisma.agentRun.create({
       data: {
         agentKey: dto.agent,
@@ -43,7 +43,7 @@ export class AgentsService {
         input: dto.params
           ? (dto.params as Prisma.InputJsonValue)
           : Prisma.JsonNull,
-        status: 'RUNNING',
+        status: 'QUEUED',
         startedAt: new Date(),
       },
     });
@@ -73,49 +73,23 @@ export class AgentsService {
     }
 
     try {
-      // Call n8n webhook
       const webhookUrl = scenario.endpoint;
-      const payload = {
-        runId: agentRun.id,
-        agentKey: dto.agent,
-        params: dto.params || {},
-      };
 
-      // Fire-and-forget: n8n will call back via /agents/callback/:runId
-      firstValueFrom(
-        this.httpService.post(webhookUrl, payload, {
-          timeout: 5000, // 5 seconds timeout
+      await this.dispatch.enqueue({
+        runId: agentRun.id,
+        endpoint: webhookUrl,
+        workflowKey: dto.agent,
+        idempotencyKey: agentRun.id,
+        payload: buildDispatchPayload({
+          runId: agentRun.id,
+          agentKey: dto.agent,
+          params: dto.params || {},
         }),
-      )
-        .then(() => {
-          this.logger.log(
-            `Successfully triggered n8n webhook for run ${agentRun.id}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Failed to call n8n webhook for run ${agentRun.id}: ${error.message}`,
-          );
-          // Update run status to ERROR
-          this.prisma.agentRun
-            .update({
-              where: { id: agentRun.id },
-              data: {
-                status: 'ERROR',
-                error: `Failed to call n8n webhook: ${error.message}`,
-                finishedAt: new Date(),
-              },
-            })
-            .catch((updateError) => {
-              this.logger.error(
-                `Failed to update run ${agentRun.id} status: ${updateError.message}`,
-              );
-            });
-        });
+        headers: {},
+      });
 
       return agentRun;
     } catch (error) {
-      // If immediate error occurred, update run status
       await this.prisma.agentRun.update({
         where: { id: agentRun.id },
         data: {
@@ -126,7 +100,7 @@ export class AgentsService {
       });
 
       throw new BadRequestException(
-        `Failed to start agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to enqueue agent dispatch: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }

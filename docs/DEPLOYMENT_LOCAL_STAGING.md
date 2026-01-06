@@ -1,5 +1,8 @@
 ## Local staging deployment (docker compose)
 
+Canonical runbook: `docs/runbooks/deploy.md`.
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 ### Требования
 - `docker` + `docker compose`
 - `pnpm` (опционально, если хотите гонять smoke с хоста)
@@ -52,6 +55,9 @@ pnpm --filter backend test:e2e:smoke
 
 Файлы вида `.env*` в этом репозитории могут быть заблокированы правилами workspace,
 поэтому шаблоны лежат как `backend/ENV.example.template` и `infra/ENV.staging.example`.
+
+
+
 
 
 

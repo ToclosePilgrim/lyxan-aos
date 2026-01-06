@@ -3,3 +3,6 @@ import { CreateBomItemDto } from './create-bom-item.dto';
 
 export class UpdateBomItemDto extends PartialType(CreateBomItemDto) {}
 
+
+
+

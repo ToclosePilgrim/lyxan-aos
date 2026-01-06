@@ -8,6 +8,7 @@ import { InventoryModule } from '../../inventory/inventory.module';
 import { InventoryAccountingLinkService } from '../inventory-accounting-link.service';
 import { MdmItemsModule } from '../../mdm/items/mdm-items.module';
 import { PostingRunsModule } from '../posting-runs/posting-runs.module';
+import { FinanceAccountMappingModule } from '../account-mapping/finance-account-mapping.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PostingRunsModule } from '../posting-runs/posting-runs.module';
     InventoryModule,
     MdmItemsModule,
     PostingRunsModule,
+    FinanceAccountMappingModule,
   ],
   providers: [SalesDocumentsService, InventoryAccountingLinkService],
   controllers: [SalesDocumentsController],

@@ -30,6 +30,7 @@ import { FromSupplyReceiptDto } from './dto/from-supply-receipt.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
+import { Idempotency } from '../../../common/idempotency/idempotency.decorator';
 
 @ApiTags('finance/documents')
 @Controller('finance/documents')
@@ -105,6 +106,7 @@ export class FinancialDocumentsController {
   }
 
   @Post()
+  @Idempotency({ required: true })
   @UseGuards(RolesGuard)
   @Roles('Admin')
   @HttpCode(HttpStatus.CREATED)
@@ -253,6 +255,7 @@ export class FinancialDocumentsController {
   }
 
   @Post(':id/payments')
+  @Idempotency({ required: true })
   @UseGuards(RolesGuard)
   @Roles('Admin', 'Manager')
   @HttpCode(HttpStatus.CREATED)

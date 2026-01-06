@@ -13,6 +13,9 @@ export const ACCOUNTING_ACCOUNTS = {
   // Acquiring clearing (TZ 5.3)
   CLEARING_ACQUIRING: '57.02',
   CLEARING_ACQUIRING_SALES: '57.03',
+  // Inventory ↔ COGS clearing (TZ CI.2 / TZ10.1 links invariants)
+  // Must be a balance-sheet clearing account (must NOT be included in P&L account groups).
+  CLEARING_INVENTORY_COGS: '57.04',
   PREPAID_EXPENSE_ASSET: '97.01',
   FIXED_ASSET: '01.01',
   INTANGIBLE_ASSET: '04.01',

@@ -1,5 +1,9 @@
 # DWH/BI contour (RAW → CORE → MARTS)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
+Important: DWH/BI is **not** a runtime Source of Truth. Runtime reads must use canonical tables/read-models (inventory movements/batches/balances, ledger, posting runs).
+
 ## Scope (stage 0)
 - RAW export: `stock_movements`, `inventory_balances`, `inventory_batches` (optional), `accounting_entries`, `inventory_adjustments`, `scm_transfers`, `scm_supplies`, `sales_documents`, `sales_document_lines`, `os_events` (optional).
 - CORE views: `core_stock_movements`, `core_accounting_entries`, `core_inventory_snapshot_daily`.
@@ -29,6 +33,9 @@ Suggested schedule: nightly (e.g., 02:00 local). For small volumes, full refresh
 - `core.sql` — creates/overwrites core tables.
 - `marts.sql` — creates/overwrites marts (P&L daily, inventory balance daily).
 - `core-tables.md` — definitions and field meanings.
+
+
+
 
 
 

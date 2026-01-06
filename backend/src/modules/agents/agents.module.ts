@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
 import { AgentsController } from './agents.controller';
 import { AgentsService } from './agents.service';
 import { IntegrationLogsModule } from '../integration-logs/integration-logs.module';
+import { AgentsCallbackHmacGuard } from './guards/agents-callback-hmac.guard';
+import { AgentDispatchQueueModule } from './dispatch/agent-dispatch.module';
 
 @Module({
-  imports: [HttpModule, IntegrationLogsModule],
+  imports: [IntegrationLogsModule, AgentDispatchQueueModule],
   controllers: [AgentsController],
-  providers: [AgentsService],
+  providers: [AgentsService, AgentsCallbackHmacGuard],
   exports: [AgentsService],
 })
 export class AgentsModule {}

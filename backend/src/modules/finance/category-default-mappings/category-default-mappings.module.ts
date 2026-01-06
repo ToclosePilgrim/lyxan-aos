@@ -12,3 +12,6 @@ import { FinanceCategoryResolverService } from './category-resolver.service';
 })
 export class CategoryDefaultMappingsModule {}
 
+
+
+

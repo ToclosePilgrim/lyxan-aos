@@ -60,7 +60,7 @@ export class WarehousesService {
           },
           _count: {
             select: {
-              ScmStock: true,
+              InventoryBalance: true,
               ScmSupply: true,
             },
           },
@@ -88,7 +88,7 @@ export class WarehousesService {
         notes: warehouse.notes,
         createdAt: warehouse.createdAt,
         updatedAt: warehouse.updatedAt,
-        stocksCount: (warehouse as any)._count?.ScmStock ?? 0,
+        stocksCount: (warehouse as any)._count?.InventoryBalance ?? 0,
         suppliesCount: (warehouse as any)._count?.ScmSupply ?? 0,
       })),
       total,
@@ -108,7 +108,7 @@ export class WarehousesService {
         },
         _count: {
           select: {
-            ScmStock: true,
+            InventoryBalance: true,
             ScmSupply: true,
           },
         },
@@ -132,7 +132,7 @@ export class WarehousesService {
       notes: warehouse.notes,
       createdAt: warehouse.createdAt,
       updatedAt: warehouse.updatedAt,
-      stocksCount: (warehouse as any)._count?.ScmStock ?? 0,
+      stocksCount: (warehouse as any)._count?.InventoryBalance ?? 0,
       suppliesCount: (warehouse as any)._count?.ScmSupply ?? 0,
     };
   }

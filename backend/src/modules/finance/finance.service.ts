@@ -63,26 +63,29 @@ export class FinanceService {
     let totalLogistics = 0;
     let totalOpex = 0;
 
+    const addIncome = (accounts: readonly string[], e: any, val: number) => {
+      if (accounts.includes(e.creditAccount)) return val;
+      if (accounts.includes(e.debitAccount)) return -val;
+      return 0;
+    };
+    const addExpense = (accounts: readonly string[], e: any, val: number) => {
+      if (accounts.includes(e.debitAccount)) return val;
+      if (accounts.includes(e.creditAccount)) return -val;
+      return 0;
+    };
+
     for (const e of entries) {
       const val = useBase(e);
-      if (PNL_ACCOUNT_GROUPS.REVENUE.includes(e.creditAccount)) {
-        totalRevenue += val;
-      }
-      if (PNL_ACCOUNT_GROUPS.COGS.includes(e.debitAccount)) {
-        totalCogs += val;
-      }
-      if (PNL_ACCOUNT_GROUPS.MARKETPLACE_FEES.includes(e.debitAccount)) {
-        totalMarketplaceFees += val;
-      }
-      if (PNL_ACCOUNT_GROUPS.REFUNDS.includes(e.debitAccount)) {
-        totalRefunds += val;
-      }
-      if (PNL_ACCOUNT_GROUPS.LOGISTICS.includes(e.debitAccount)) {
-        totalLogistics += val;
-      }
-      if (PNL_ACCOUNT_GROUPS.OPEX.includes(e.debitAccount)) {
-        totalOpex += val;
-      }
+      // Universal P&L sign rules (MVP via account grouping):
+      // - Income accounts: credit - debit
+      // - Expense accounts: debit - credit
+      totalRevenue += addIncome(PNL_ACCOUNT_GROUPS.REVENUE, e, val);
+      // NOTE: COGS/refunds/fees/etc are treated as expenses (reversals via credit reduce them)
+      totalCogs += addExpense(PNL_ACCOUNT_GROUPS.COGS, e, val);
+      totalMarketplaceFees += addExpense(PNL_ACCOUNT_GROUPS.MARKETPLACE_FEES, e, val);
+      totalRefunds += addExpense(PNL_ACCOUNT_GROUPS.REFUNDS, e, val);
+      totalLogistics += addExpense(PNL_ACCOUNT_GROUPS.LOGISTICS, e, val);
+      totalOpex += addExpense(PNL_ACCOUNT_GROUPS.OPEX, e, val);
     }
 
     const grossMargin =

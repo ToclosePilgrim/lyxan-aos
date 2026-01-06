@@ -19,6 +19,7 @@ import { OsEventsService } from '../../os-events/os-events.service';
 import { AccountingValidationService } from '../../finance/accounting-validation.service';
 import { MdmItemsService } from '../../mdm/items/mdm-items.service';
 import { MdmOffersService } from '../../mdm/offers/mdm-offers.service';
+import { ScopeHelperService } from '../../../common/scope/scope-helper.service';
 
 @common_1.Injectable()
 export class ScmSuppliesService {
@@ -35,6 +36,7 @@ export class ScmSuppliesService {
   inventoryAccountingLink;
   osEvents;
   postingRuns;
+  scopeHelper;
   constructor(
     prisma: PrismaService,
     inventoryService: InventoryService,
@@ -49,6 +51,7 @@ export class ScmSuppliesService {
     inventoryAccountingLink: InventoryAccountingLinkService,
     osEvents: OsEventsService,
     postingRuns: PostingRunsService,
+    scopeHelper: ScopeHelperService,
   ) {
     this.prisma = prisma;
     this.inventoryService = inventoryService;
@@ -63,6 +66,7 @@ export class ScmSuppliesService {
     this.inventoryAccountingLink = inventoryAccountingLink;
     this.osEvents = osEvents;
     this.postingRuns = postingRuns;
+    this.scopeHelper = scopeHelper;
   }
   BatchSource =
     client_1.BatchSourceType ??
@@ -171,7 +175,7 @@ export class ScmSuppliesService {
           unitCost: landed.landedUnitCost,
           currency,
           docType: this.MovementDocType?.SUPPLY ?? 'SUPPLY',
-          docId: supply.id,
+          docId: receipt.id, // Use receipt.id as docId for SUPPLY_RECEIPT
           batchSourceType:
             this.BatchSource?.SUPPLY ??
             inventory_enums_1.InventoryBatchSourceType.SUPPLY,
@@ -184,6 +188,7 @@ export class ScmSuppliesService {
             supplyItemId: item.id,
             supplyReceiptId: receipt.id,
             supplyReceiptLineId: line.id,
+            lineId: line.id, // For idempotency key generation
           },
           occurredAt: receiptDate,
           breakdown: {
@@ -583,6 +588,37 @@ export class ScmSuppliesService {
     if (filters?.productionOrderId) {
       where.productionOrderId = filters.productionOrderId;
     }
+    
+    // Apply scope filtering for non-superadmin users
+    // ScmSupply doesn't have legalEntityId directly, so filter by allowed warehouses
+    try {
+      const scope = this.scopeHelper.getScope();
+      if (!scope.isSuperAdmin && scope.legalEntityId) {
+        const allowedWarehouseIds = await this.scopeHelper.getAllowedWarehouseIds(scope.legalEntityId);
+        if (allowedWarehouseIds.length === 0) {
+          // No allowed warehouses - return empty result
+          return [];
+        }
+        // Add warehouse filter (combine with existing if any)
+        if (where.warehouseId) {
+          // If user specified warehouseId, validate it's in allowed list
+          if (!allowedWarehouseIds.includes(where.warehouseId as string)) {
+            throw new common_1.ForbiddenException('Access denied to specified warehouse');
+          }
+        } else {
+          // Otherwise, filter by allowed warehouses
+          where.warehouseId = { in: allowedWarehouseIds };
+        }
+      }
+    } catch (error) {
+      // If scope not found or error, deny access (deny-by-default)
+      if (error instanceof common_1.ForbiddenException) {
+        throw error;
+      }
+      // For other errors, log and deny
+      throw new common_1.ForbiddenException('Unable to determine access scope');
+    }
+    
     const requestedLimit = filters?.limit ? Number(filters.limit) : undefined;
     const limit = requestedLimit ? Math.min(requestedLimit, 100) : undefined;
     const supplies = await this.prisma.scmSupply.findMany({
@@ -1208,7 +1244,11 @@ export class ScmSuppliesService {
                   customsUnitCost: landed.customsUnitCost,
                   inboundUnitCost: landed.inboundUnitCost,
                 },
-                meta: { supplyId: supplyWithItems.id, supplyItemId: item.id },
+                meta: {
+                  supplyId: supplyWithItems.id,
+                  supplyItemId: item.id,
+                  lineId: item.id, // For idempotency key generation (supplyItemId)
+                },
                 sourceDocType: client_1.AccountingDocType.SUPPLY,
                 sourceDocId: supplyWithItems.id,
               },

@@ -1,122 +1,16 @@
-# Руководство разработчика AOS
+## Developer guide (thin index)
 
-Данное руководство описывает процесс разработки и запуска проекта Ly[x]an AOS (Agentic Operating System).
+This file is intentionally short. Canonical Source of Truth:
+- `docs/product/00-current-scope-and-goals.md`
+- `docs/architecture/SCM_FINANCE_CANON.md`
 
-## 1. Предпосылки
+Runbooks:
+- Deploy / run: `docs/runbooks/deploy.md`
+- Ops checklist: `docs/runbooks/operations-checklist.md`
+- Data integrity: `docs/runbooks/data-integrity.md`
+- E2E / CI guardrails: `docs/runbooks/e2e-ci.md`
 
-Перед началом работы убедитесь, что установлено:
-
-- **Node.js 20+** — [скачать](https://nodejs.org/)
-- **pnpm** — устанавливается через `corepack enable` (встроен в Node.js 20+) или глобально: `npm install -g pnpm`
-- **Docker Desktop** — [скачать](https://www.docker.com/products/docker-desktop/)
-  - Docker Desktop должен быть запущен и находиться в статусе "Running"
-- **Git** — для клонирования репозитория
-
-## 2. Структура проекта
-
-```
-lyxan_aos/
-├── backend/          # NestJS API приложение
-│   ├── src/         # Исходный код backend
-│   ├── prisma/      # Prisma schema и миграции
-│   └── package.json
-├── frontend/         # Next.js UI приложение (App Router)
-│   ├── app/         # Next.js App Router страницы
-│   ├── components/  # React компоненты
-│   └── package.json
-├── shared/           # Общие типы и константы (если используются)
-├── infra/            # Docker/Compose конфигурации для AOS
-│   ├── docker-compose.yml
-│   ├── Dockerfile.backend
-│   └── Dockerfile.frontend
-├── package.json      # Корневой package.json (pnpm workspace)
-└── pnpm-workspace.yaml
-```
-
-## 3. Запуск в режиме Docker-only (рекомендованный)
-
-Этот режим запускает все сервисы (backend, frontend, postgres, redis) в Docker контейнерах.
-
-### 3.1. Первый запуск
-
-1. **Клонируйте репозиторий** (если еще не сделано):
-   ```bash
-   git clone <repository-url>
-   cd lyxan_aos
-   ```
-
-2. **Установите зависимости**:
-   ```bash
-   pnpm install
-   ```
-
-3. **Соберите backend** (важно! Dockerfile.backend ожидает собранный `backend/dist`):
-   ```bash
-   pnpm dev:backend:build
-   ```
-
-4. **Соберите и запустите Docker контейнеры**:
-   ```bash
-   pnpm dev:docker:build
-   pnpm dev:docker:up
-   ```
-
-После выполнения этих команд:
-
-- **Backend** доступен по http://localhost:3001
-- **Frontend** доступен по http://localhost:3000
-- **PostgreSQL** доступен на порту 5433 (внутри контейнера — 5432)
-- **Redis** доступен на порту 6379
-
-### 3.2. Остановка
-
-```bash
-pnpm dev:docker:down
-```
-
-### 3.3. Просмотр логов
-
-```bash
-# Логи backend
-cd infra
-docker compose logs backend --tail=100
-
-# Логи frontend
-docker compose logs frontend --tail=100
-
-# Логи всех сервисов
-docker compose logs --tail=100
-```
-
-### 3.4. Пересборка после изменений
-
-Если вы внесли изменения в код:
-
-1. **Для backend**:
-   ```bash
-   pnpm dev:backend:build
-   cd infra
-   docker compose build backend
-   docker compose up -d backend
-   ```
-
-2. **Для frontend**:
-   ```bash
-   cd infra
-   docker compose build frontend
-   docker compose up -d frontend
-   ```
-
-## 4. Гибридный режим (базы в Docker, backend/frontend локально)
-
-Этот режим полезен для активной разработки, когда нужен hot-reload.
-
-### 4.1. Запуск баз данных в Docker
-
-```bash
-cd infra
-docker compose up -d postgres redis
-```
+If this file conflicts with canon/runbooks, treat this file as non-authoritative and follow the docs above.
 
 ### 4.2. Запуск backend локально
 
@@ -352,6 +246,9 @@ pnpm prisma migrate dev --name your_migration_name
 ---
 
 **Последнее обновление**: 2025-01-27
+
+
+
 
 
 

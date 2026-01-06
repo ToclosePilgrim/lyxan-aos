@@ -1,0 +1,12 @@
+DEPRECATED FILE (typo)
+
+This file name is misspelled and kept only because it cannot be deleted by policy.
+Do not rely on it.
+
+Use:
+- `.cursor/rules/additional.mdc`
+- `.cursor/rules/docs.mdc`
+
+---
+alwaysApply: true
+---

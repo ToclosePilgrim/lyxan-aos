@@ -24,6 +24,11 @@ describe('FinanceService.getPnl (C.3 strict scope)', () => {
   it('filters entries by countryId/brandId (+marketplaceId when provided)', async () => {
     const prismaMock = {
       accountingEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      brandCountry: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ legalEntityId: 'le-1' }),
+      },
     } as unknown as PrismaService;
 
     const moduleRef = await Test.createTestingModule({
@@ -44,8 +49,7 @@ describe('FinanceService.getPnl (C.3 strict scope)', () => {
     } as any);
 
     const args = (prismaMock as any).accountingEntry.findMany.mock.calls[0][0];
-    expect(args.where.countryId).toBe('c1');
-    expect(args.where.brandId).toBe('b1');
+    expect(args.where.legalEntityId).toBe('le-1');
     expect(args.where.marketplaceId).toBe('m1');
     expect(args.where.postingDate.gte).toBeInstanceOf(Date);
     expect(args.where.postingDate.lte).toBeInstanceOf(Date);

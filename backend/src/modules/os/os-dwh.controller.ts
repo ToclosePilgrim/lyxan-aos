@@ -1,8 +1,18 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PrismaService } from '../../database/prisma.service';
 import { ok, fail, OsApiResponse } from './os-api.types';
+import { Request } from 'express';
 
 @ApiTags('os-dwh')
 @ApiCookieAuth()
@@ -11,13 +21,23 @@ import { ok, fail, OsApiResponse } from './os-api.types';
 export class OsDwhController {
   constructor(private readonly prisma: PrismaService) {}
 
+  private assertSuperAdmin(req: Request & { user?: any }) {
+    const user = (req as any)?.user;
+    const isSuperAdmin = user?.role === 'SuperAdmin' || user?.role === 'Admin';
+    if (!isSuperAdmin) {
+      throw new ForbiddenException('OS DWH endpoints are superadmin-only');
+    }
+  }
+
   @Post('dwh/refresh')
   @ApiOperation({
     summary: 'Trigger DWH refresh (raw/core/marts). Placeholder trigger.',
   })
   async refresh(
+    @Req() req: Request & { user?: any },
     @Body() body: { raw?: boolean; core?: boolean; marts?: boolean },
   ): Promise<OsApiResponse<{ status: string; requested: any }>> {
+    this.assertSuperAdmin(req);
     return ok({
       status: 'queued (placeholder)',
       requested: {
@@ -30,7 +50,8 @@ export class OsDwhController {
 
   @Post('dwh/query')
   @ApiOperation({ summary: 'Execute DWH query (disabled here, use BigQuery).' })
-  async query(): Promise<OsApiResponse<never>> {
+  async query(@Req() req: Request & { user?: any }): Promise<OsApiResponse<never>> {
+    this.assertSuperAdmin(req);
     return fail(
       'DWH_QUERY_DISABLED',
       'Direct DWH queries are disabled in this environment. Use BigQuery directly.',
@@ -43,10 +64,12 @@ export class OsDwhController {
       'Export raw table snapshot (incremental by updatedSince if available).',
   })
   async exportRaw(
+    @Req() req: Request & { user?: any },
     @Query('table') table: string,
     @Query('updatedSince') updatedSince?: string,
     @Query('limit') limit = '1000',
   ): Promise<OsApiResponse<{ items: any[] }>> {
+    this.assertSuperAdmin(req);
     const maxLimit = 2000;
     const take = Math.min(Number(limit) || 1000, maxLimit);
     const sinceDate = updatedSince ? new Date(updatedSince) : undefined;
@@ -94,4 +117,7 @@ export class OsDwhController {
     return ok({ items });
   }
 }
+
+
+
 

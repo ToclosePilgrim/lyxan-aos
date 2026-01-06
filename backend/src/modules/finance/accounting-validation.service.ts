@@ -1,32 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
 import { AccountingDocType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
-export class AccountingUnbalancedException extends Error {
-  constructor(
-    message: string,
-    public readonly details: {
-      docType: AccountingDocType;
-      docId: string;
-      currencyTotals: Array<{
-        currency: string;
-        totalDebit: string;
-        totalCredit: string;
-      }>;
-      topDebitAccounts: Array<{ account: string; amount: string }>;
-      topCreditAccounts: Array<{ account: string; amount: string }>;
-    },
-  ) {
-    super(message);
-    this.name = 'AccountingUnbalancedException';
-  }
-}
+export type AccountingBalanceErrorDetails = {
+  docType: AccountingDocType;
+  docId: string;
+  postingRunId?: string;
+  base: {
+    debitSum: string;
+    creditSum: string;
+    difference: string;
+  };
+  currencies: Array<{
+    currency: string;
+    debitSum: string;
+    creditSum: string;
+    difference: string;
+  }>;
+  topDebitAccounts: Array<{ account: string; amountBase: string }>;
+  topCreditAccounts: Array<{ account: string; amountBase: string }>;
+};
 
 export function computeDocumentBalance(
   entries: Array<{
     debitAccount: string;
     creditAccount: string;
-    amount: Prisma.Decimal;
+    amountBase: Prisma.Decimal;
     currency: string;
   }>,
 ) {
@@ -38,18 +37,22 @@ export function computeDocumentBalance(
   >();
 
   for (const e of entries) {
-    const debit = debitTotals.get(e.debitAccount) ?? new Prisma.Decimal(0);
-    debitTotals.set(e.debitAccount, debit.add(e.amount));
-
-    const credit = creditTotals.get(e.creditAccount) ?? new Prisma.Decimal(0);
-    creditTotals.set(e.creditAccount, credit.add(e.amount));
-
     const cur = byCurrency.get(e.currency) ?? {
       debit: new Prisma.Decimal(0),
       credit: new Prisma.Decimal(0),
     };
-    cur.debit = cur.debit.add(e.amount);
-    cur.credit = cur.credit.add(e.amount);
+
+    if (e.debitAccount) {
+      const debit = debitTotals.get(e.debitAccount) ?? new Prisma.Decimal(0);
+      debitTotals.set(e.debitAccount, debit.add(e.amountBase));
+      cur.debit = cur.debit.add(e.amountBase);
+    }
+    if (e.creditAccount) {
+      const credit = creditTotals.get(e.creditAccount) ?? new Prisma.Decimal(0);
+      creditTotals.set(e.creditAccount, credit.add(e.amountBase));
+      cur.credit = cur.credit.add(e.amountBase);
+    }
+
     byCurrency.set(e.currency, cur);
   }
 
@@ -81,103 +84,164 @@ export function assertDoubleEntryInvariants(params: {
   entries: Array<{
     debitAccount: string;
     creditAccount: string;
-    amount: Prisma.Decimal;
+    amountBase: Prisma.Decimal;
     currency: string;
   }>;
 }) {
   for (const e of params.entries) {
     if (!e.debitAccount || !e.creditAccount) {
-      throw new AccountingUnbalancedException(
-        `Accounting entry is missing debit/credit for ${params.docType}:${params.docId}`,
-        {
-          docType: params.docType,
-          docId: params.docId,
-          currencyTotals: [],
-          topDebitAccounts: [],
-          topCreditAccounts: [],
-        },
-      );
+      throw new UnprocessableEntityException({
+        message: `Accounting entry is missing debit/credit for ${params.docType}:${params.docId}`,
+        docType: params.docType,
+        docId: params.docId,
+      });
     }
-    if (e.amount.lte(0)) {
-      throw new AccountingUnbalancedException(
-        `Accounting entry amount must be > 0 for ${params.docType}:${params.docId}`,
-        {
-          docType: params.docType,
-          docId: params.docId,
-          currencyTotals: [],
-          topDebitAccounts: [],
-          topCreditAccounts: [],
-        },
-      );
+    if (e.amountBase.lte(0)) {
+      throw new UnprocessableEntityException({
+        message: `Accounting entry amountBase must be > 0 for ${params.docType}:${params.docId}`,
+        docType: params.docType,
+        docId: params.docId,
+      });
     }
   }
 }
 
 @Injectable()
 export class AccountingValidationService {
+  private readonly logger = new Logger(AccountingValidationService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   private isValidateOnPostEnabled(): boolean {
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    // TZ 7: ALWAYS ON in production (prod-safe)
+    if (nodeEnv === 'production') return true;
+    // In dev/test, allow override, but default ON
     const raw = process.env.ACCOUNTING_VALIDATE_ON_POST;
-    if (raw === 'true') return true;
     if (raw === 'false') return false;
-    // default: enabled in non-production
-    return process.env.NODE_ENV !== 'production';
+    return true;
   }
 
   async validateDocumentBalance(params: {
     docType: AccountingDocType;
     docId: string;
+    postingRunId?: string;
     tx?: Prisma.TransactionClient;
   }): Promise<void> {
     const client = params.tx ?? this.prisma;
     const entries = await client.accountingEntry.findMany({
-      where: { docType: params.docType, docId: params.docId },
+      where: params.postingRunId
+        ? ({ postingRunId: params.postingRunId } as any)
+        : ({ docType: params.docType, docId: params.docId } as any),
       select: {
         debitAccount: true,
         creditAccount: true,
-        amount: true,
+        amountBase: true,
         currency: true,
       },
       orderBy: { lineNumber: 'asc' },
     });
 
+    // Empty set is trivially balanced (0 == 0). Some flows may legitimately produce no entries.
+    if (!entries.length) return;
+
     const normalized = entries.map((e) => ({
       debitAccount: e.debitAccount,
       creditAccount: e.creditAccount,
-      amount: new Prisma.Decimal(e.amount),
+      amountBase: new Prisma.Decimal(e.amountBase),
       currency: e.currency,
     }));
-    assertDoubleEntryInvariants({
-      docType: params.docType,
-      docId: params.docId,
-      entries: normalized,
-    });
-
     const balance = computeDocumentBalance(normalized);
+    const totalDebit = balance.currencyTotals.reduce(
+      (acc, t) => acc.add(new Prisma.Decimal(t.totalDebit)),
+      new Prisma.Decimal(0),
+    );
+    const totalCredit = balance.currencyTotals.reduce(
+      (acc, t) => acc.add(new Prisma.Decimal(t.totalCredit)),
+      new Prisma.Decimal(0),
+    );
+    const totalDiff = totalDebit.sub(totalCredit);
 
-    const unbalanced = balance.currencyTotals.find((t) => !t.isBalanced);
-    if (unbalanced) {
-      throw new AccountingUnbalancedException(
-        `Accounting is unbalanced for ${params.docType}:${params.docId} (currency=${unbalanced.currency})`,
-        {
-          docType: params.docType,
-          docId: params.docId,
-          currencyTotals: balance.currencyTotals.map((t) => ({
-            currency: t.currency,
-            totalDebit: t.totalDebit,
-            totalCredit: t.totalCredit,
-          })),
-          topDebitAccounts: balance.topDebitAccounts,
-          topCreditAccounts: balance.topCreditAccounts,
+    // Invariants may fail for malformed rows (missing debit/credit/amountBase <= 0).
+    // We still want to return a strict 422 with document totals.
+    try {
+      assertDoubleEntryInvariants({
+        docType: params.docType,
+        docId: params.docId,
+        entries: normalized,
+      });
+    } catch (e: any) {
+      const details: AccountingBalanceErrorDetails = {
+        docType: params.docType,
+        docId: params.docId,
+        postingRunId: params.postingRunId,
+        base: {
+          debitSum: totalDebit.toString(),
+          creditSum: totalCredit.toString(),
+          difference: totalDiff.toString(),
         },
-      );
+        currencies: balance.currencyTotals.map((t) => ({
+          currency: t.currency,
+          debitSum: t.totalDebit,
+          creditSum: t.totalCredit,
+          difference: new Prisma.Decimal(t.totalDebit)
+            .sub(new Prisma.Decimal(t.totalCredit))
+            .toString(),
+        })),
+        topDebitAccounts: balance.topDebitAccounts.map((x) => ({
+          account: x.account,
+          amountBase: x.amount,
+        })),
+        topCreditAccounts: balance.topCreditAccounts.map((x) => ({
+          account: x.account,
+          amountBase: x.amount,
+        })),
+      };
+      this.logger.error('Accounting validation failed: invariants', details as any);
+      throw new UnprocessableEntityException({
+        message: e?.response?.message ?? e?.message ?? 'Accounting invariant violation',
+        ...details,
+      });
+    }
+
+    if (!totalDiff.isZero()) {
+      const details: AccountingBalanceErrorDetails = {
+        docType: params.docType,
+        docId: params.docId,
+        postingRunId: params.postingRunId,
+        base: {
+          debitSum: totalDebit.toString(),
+          creditSum: totalCredit.toString(),
+          difference: totalDiff.toString(),
+        },
+        currencies: balance.currencyTotals.map((t) => ({
+          currency: t.currency,
+          debitSum: t.totalDebit,
+          creditSum: t.totalCredit,
+          difference: new Prisma.Decimal(t.totalDebit)
+            .sub(new Prisma.Decimal(t.totalCredit))
+            .toString(),
+        })),
+        topDebitAccounts: balance.topDebitAccounts.map((x) => ({
+          account: x.account,
+          amountBase: x.amount,
+        })),
+        topCreditAccounts: balance.topCreditAccounts.map((x) => ({
+          account: x.account,
+          amountBase: x.amount,
+        })),
+      };
+      this.logger.error('Accounting validation failed: unbalanced', details as any);
+      throw new UnprocessableEntityException({
+        message: `Accounting is unbalanced for ${params.docType}:${params.docId}`,
+        ...details,
+      });
     }
   }
 
   async maybeValidateDocumentBalanceOnPost(params: {
     docType: AccountingDocType;
     docId: string;
+    postingRunId?: string;
     tx?: Prisma.TransactionClient;
   }) {
     if (!this.isValidateOnPostEnabled()) return;

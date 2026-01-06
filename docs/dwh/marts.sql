@@ -87,3 +87,6 @@ FROM `${BQ_PROJECT_ID}.${BQ_DATASET_CORE}.core_inventory_snapshot_daily`;
 
 
 
+
+
+

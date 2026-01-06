@@ -60,3 +60,6 @@ export class GetStockLedgerDto {
   sort: 'createdAt:asc' | 'createdAt:desc' = 'createdAt:desc';
 }
 
+
+
+

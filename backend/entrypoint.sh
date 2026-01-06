@@ -6,6 +6,9 @@ cd /app/backend
 echo "🔄 Running Prisma migrations..."
 pnpm exec prisma migrate deploy
 
+echo "🔧 Generating Prisma Client..."
+pnpm exec prisma generate
+
 # Seed не должен падать, если уже всё есть
 if [ -f "prisma/seed.ts" ] || [ -f "prisma/seed.js" ] || [ -f "dist/seeds/seed.js" ]; then
   echo "🌱 Running Prisma seed (if configured)..."

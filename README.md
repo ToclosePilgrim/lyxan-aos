@@ -2,6 +2,17 @@
 
 Монорепозиторий для управления e-commerce платформой.
 
+## Documentation (Source of Truth)
+
+- **Current scope/goals**: `docs/product/00-current-scope-and-goals.md`
+- **Roadmap (operationalization)**: `docs/product/01-roadmap-operationalization.md`
+- **SCM+Finance canon (SoT)**: `docs/architecture/SCM_FINANCE_CANON.md`
+- **Runbooks**:
+  - `docs/runbooks/deploy.md`
+  - `docs/runbooks/operations-checklist.md`
+  - `docs/runbooks/data-integrity.md`
+  - `docs/runbooks/e2e-ci.md`
+
 ## Структура проекта
 
 ```
@@ -32,7 +43,7 @@ pnpm -F backend start
 pnpm -F frontend dev
 ```
 
-### Запуск AOS v0 в Docker
+### Запуск стека в Docker (local-staging)
 
 Самый простой способ запустить весь стек одной командой из корня проекта.
 

@@ -31,6 +31,7 @@ import { PostingRunsService } from '../posting-runs/posting-runs.service';
 import { CurrencyRateService } from '../currency-rates/currency-rate.service';
 import { MoneyTransactionsService } from '../money-transactions/money-transactions.service';
 import { StatementMatchingService } from './statement-matching.service';
+import { AccountingValidationService } from '../accounting-validation.service';
 
 type MatchEntityType = 'PAYMENT_EXECUTION' | 'MONEY_TRANSACTION';
 
@@ -50,6 +51,7 @@ export class StatementsPostingService {
     private readonly matcher: StatementMatchingService,
     private readonly categoryResolver: FinanceCategoryResolverService,
     private readonly postingRuns: PostingRunsService,
+    private readonly validation: AccountingValidationService,
   ) {}
 
   private getDateWindowDays(provider: StatementProvider): number {
@@ -670,6 +672,13 @@ export class StatementsPostingService {
         },
         postingRunId: run.id,
       }));
+
+    await this.validation.maybeValidateDocumentBalanceOnPost({
+      tx: params.tx,
+      docType: AccountingDocType.STATEMENT_LINE_FEE,
+      docId: line.id,
+      postingRunId: run.id,
+    });
 
     await this.cashLinks.link({
       tx: params.tx,

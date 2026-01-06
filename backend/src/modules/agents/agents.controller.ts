@@ -6,6 +6,8 @@ import {
   Param,
   Query,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +21,8 @@ import { AgentsService } from './agents.service';
 import { RunAgentDto } from './dto/run-agent.dto';
 import type { AgentCallbackPayload } from './types/agent-callback-payload.interface';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AgentsCallbackHmacGuard } from './guards/agents-callback-hmac.guard';
+import { Idempotency } from '../../common/idempotency/idempotency.decorator';
 
 @ApiTags('agents')
 @Controller('agents')
@@ -26,11 +30,13 @@ export class AgentsController {
   constructor(private readonly agentsService: AgentsService) {}
 
   @Post('run')
+  @Idempotency({ required: true })
   @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Run an agent scenario' })
   @ApiResponse({
-    status: 201,
-    description: 'Agent run started successfully',
+    status: 202,
+    description: 'Agent run enqueued successfully',
   })
   @ApiResponse({ status: 404, description: 'Agent scenario not found' })
   @ApiResponse({ status: 400, description: 'Failed to start agent' })
@@ -38,14 +44,13 @@ export class AgentsController {
   async runAgent(@Body() dto: RunAgentDto) {
     const run = await this.agentsService.runAgent(dto);
     return {
-      id: run.id,
-      agentKey: run.agentKey,
-      status: run.status,
-      startedAt: run.startedAt,
+      runId: run.id,
+      status: 'QUEUED',
     };
   }
 
   @Post('callback/:runId')
+  @UseGuards(AgentsCallbackHmacGuard)
   @ApiOperation({
     summary: 'Callback endpoint for n8n to report agent results',
   })
@@ -58,6 +63,7 @@ export class AgentsController {
     status: 200,
     description: 'Callback processed successfully',
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized - invalid HMAC signature or replay detected' })
   @ApiResponse({ status: 404, description: 'Agent run not found' })
   async handleCallback(
     @Param('runId') runId: string,

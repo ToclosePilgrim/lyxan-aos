@@ -55,3 +55,6 @@ export class PartialSupplyReceiveDto {
   items: SupplyPartialReceiveItemDto[];
 }
 
+
+
+

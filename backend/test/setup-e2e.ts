@@ -9,6 +9,8 @@ import { AppModule } from '../src/app.module';
 import { TestSeedModule } from '../src/modules/devtools/test-seed/test-seed.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '../src/common/interceptors/logging.interceptor';
+import { IdempotencyInterceptor } from '../src/common/idempotency/idempotency.interceptor';
+import { ScopeInterceptor } from '../src/common/scope/scope.interceptor';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -39,7 +41,8 @@ beforeAll(async () => {
   const { PrismaClient } = require('@prisma/client');
   const prisma = new PrismaClient();
   try {
-    const role = await prisma.role.upsert({
+    // Roles required by e2e tests
+    const adminRole = await prisma.role.upsert({
       where: { name: 'Admin' },
       update: {},
       create: {
@@ -49,15 +52,35 @@ beforeAll(async () => {
       },
     });
 
+    await prisma.role.upsert({
+      where: { name: 'Manager' },
+      update: {},
+      create: {
+        id: crypto.randomUUID(),
+        name: 'Manager',
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.role.upsert({
+      where: { name: 'FinanceManager' },
+      update: {},
+      create: {
+        id: crypto.randomUUID(),
+        name: 'FinanceManager',
+        updatedAt: new Date(),
+      },
+    });
+
     const password = await bcrypt.hash('Tairai123', 10);
     await prisma.user.upsert({
       where: { email: 'admin@aos.local' },
-      update: { password, roleId: role.id, updatedAt: new Date() },
+      update: { password, roleId: adminRole.id, updatedAt: new Date() },
       create: {
         id: crypto.randomUUID(),
         email: 'admin@aos.local',
         password,
-        roleId: role.id,
+        roleId: adminRole.id,
         updatedAt: new Date(),
       },
     });
@@ -88,6 +111,12 @@ export async function createTestApp(): Promise<{
   app: INestApplication;
   request: () => supertest.SuperTest<supertest.Test>;
   loginAsAdmin: () => Promise<string>;
+  createTokenWithLegalEntity: (
+    userId: string,
+    email: string,
+    role: string,
+    legalEntityId: string | null,
+  ) => Promise<string>;
 }> {
   const enableTestSeedApi =
     String(process.env.ENABLE_TEST_SEED_API ?? '').toLowerCase() === 'true' &&
@@ -101,6 +130,20 @@ export async function createTestApp(): Promise<{
   app.setGlobalPrefix('api');
   app.enableCors({ origin: true, credentials: true });
   app.use(cookieParser());
+
+  // Raw body support for HMAC signature verification and idempotency (same as main.ts)
+  const expressApp = app.getHttpAdapter().getInstance();
+  const express = require('express');
+  const bodyParser = express.json({
+    verify: (req: any, _res: any, buf: Buffer) => {
+      // Store raw body for all requests (needed for idempotency bodyHash check)
+      req.rawBody = buf;
+    },
+  });
+  
+  // Apply to all routes
+  expressApp.use(bodyParser);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -110,6 +153,10 @@ export async function createTestApp(): Promise<{
   );
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // Match main.ts: idempotency + scope interceptors must be enabled for e2e
+  app.useGlobalInterceptors(app.get(IdempotencyInterceptor));
+  app.useGlobalInterceptors(app.get(ScopeInterceptor));
   await app.init();
 
   const request = () => supertest(app.getHttpServer());
@@ -122,5 +169,35 @@ export async function createTestApp(): Promise<{
     return res.body.accessToken;
   };
 
-  return { app, request, loginAsAdmin };
+  /**
+   * Helper to create JWT token with legalEntityId for e2e tests
+   * This allows testing scope isolation without modifying the login flow
+   */
+  const createTokenWithLegalEntity = async (
+    userId: string,
+    email: string,
+    role: string,
+    legalEntityId: string | null,
+  ): Promise<string> => {
+    const { JwtService } = await import('@nestjs/jwt');
+    const { ConfigService } = await import('@nestjs/config');
+    const configService = app.get(ConfigService);
+    const jwtService = new JwtService({
+      secret: configService.get<string>('JWT_SECRET') || 'e2e-test-secret',
+    });
+
+    const payload: any = {
+      email,
+      sub: userId,
+      role,
+    };
+
+    if (legalEntityId) {
+      payload.legalEntityId = legalEntityId;
+    }
+
+    return jwtService.sign(payload, { expiresIn: '15m' });
+  };
+
+  return { app, request, loginAsAdmin, createTokenWithLegalEntity };
 }

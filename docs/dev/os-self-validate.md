@@ -1,5 +1,7 @@
 # OS selfValidate: status репозитории и strict-режим
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 Цель: fail-fast на рассинхронизациях между Registry и Prisma при старте приложения.
 
 Покрываемые статусные сущности сейчас:
@@ -23,6 +25,9 @@ Definition of Done для новых сущностей:
 - В Prisma-модели реально есть поле статуса.
 - STATUS_ENTITY_TO_REPO содержит нужный ключ.
 - selfValidate проходит; при ломании маппинга/поля старт падает в strict-режиме.
+
+
+
 
 
 

@@ -111,3 +111,6 @@ export class CreateRecurringJournalDto {
   cashflowCategoryId?: string;
 }
 
+
+
+

@@ -1,5 +1,7 @@
 # FinanceReport usage (staging/RAW)
 
+Canonical architecture: `docs/architecture/SCM_FINANCE_CANON.md`.
+
 ## 1. Роль
 - FinanceReport — staging-таблица после импорта отчётов маркетплейсов (OZON/WB и т.п.).
 - Не является документом продаж, не используется для официального P&L/COGS/склада.
@@ -32,6 +34,9 @@
 
 ## 5. Канонический путь
 - Импорт отчёта → FinanceReport (staging) → SalesDocumentsService.importFromReports → SalesDocument → postSalesDocument → AccountingEntry → P&L по ledger.
+
+
+
 
 
 

@@ -1024,13 +1024,45 @@ model InventoryAccountingLink {
   stockMovementId   String
   accountingEntryId String
   role              String?
+  /// Optional amount in base currency for explainability (TZ 10 Sales Posting / COGS)
+  amountBase        Decimal?        @db.Decimal(18, 6)
+  /// Link type for explainability of double-entry (COGS vs INVENTORY leg)
+  linkType          InventoryAccountingLinkType?
+  postingRunId      String?
+  inventoryTransactionId String?
+  batchId           String?
   AccountingEntry   AccountingEntry @relation(fields: [accountingEntryId], references: [id], onDelete: Cascade)
   StockMovement     StockMovement   @relation(fields: [stockMovementId], references: [id], onDelete: Cascade)
 
-  @@unique([stockMovementId, accountingEntryId])
+  @@unique([stockMovementId, accountingEntryId, linkType])
   @@index([accountingEntryId])
+  @@index([postingRunId])
+  @@index([inventoryTransactionId])
+  @@index([batchId])
   @@index([stockMovementId])
   @@map("inventory_accounting_links")
+}
+
+enum InventoryAccountingLinkType {
+  COGS
+  INVENTORY
+}
+
+model FinanceAccountMapping {
+  id           String           @id @default(uuid())
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  legalEntityId String
+  docType      AccountingDocType
+  marketplaceId String?
+  mapping      Json
+
+  LegalEntity  LegalEntity      @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([legalEntityId, docType, marketplaceId])
+  @@index([docType])
+  @@index([marketplaceId])
+  @@map("finance_account_mappings")
 }
 
 model InventoryAdjustment {
@@ -1085,6 +1117,7 @@ model InventoryTransaction {
   docType                                                                        String?
   itemId                                                                         String
   stockMovementId                                                                String?
+  idempotencyKey                                                                 String?
   updatedAt                                                                      DateTime           @updatedAt
   MdmItem                                                                        MdmItem            @relation(fields: [itemId], references: [id])
   stock_movements_inventory_transactions_stockMovementIdTostock_movements        StockMovement?     @relation("inventory_transactions_stockMovementIdTostock_movements", fields: [stockMovementId], references: [id])
@@ -1093,11 +1126,13 @@ model InventoryTransaction {
   warehouse                                                                      Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions StockMovement[]    @relation("stock_movements_inventoryTransactionIdToinventory_transactions")
 
+  @@unique([idempotencyKey])
   @@index([docType, docId])
   @@index([itemId])
   @@index([supplyId])
   @@index([supplyItemId])
   @@index([warehouseId])
+  @@index([idempotencyKey])
   @@map("inventory_transactions")
 }
 
@@ -1132,6 +1167,8 @@ model LegalEntity {
   AccountingPostingRun AccountingPostingRun[]
   CounterpartyOffer  CounterpartyOffer[]
   BrandCountry       BrandCountry[]
+  FinanceAccountMapping FinanceAccountMapping[]
+  SalesReturnOperation SalesReturnOperation[]
   Country            Country           @relation(fields: [countryCode], references: [code])
 
   @@map("legal_entities")
@@ -1213,7 +1250,7 @@ model MdmItem {
   SalesDocumentLine      SalesDocumentLine[]
   ScmBomItem             ScmBomItem[]
   ScmProduct             ScmProduct?
-  ScmStock               ScmStock[]
+  // ScmStock removed (TZ 9): InventoryBalance/StockBatch/StockMovement are canonical
   ScmSupplyItem          ScmSupplyItem[]
   ScmTransferItem        ScmTransferItem[]
   SpecProfile            SpecProfile[]
@@ -1221,6 +1258,7 @@ model MdmItem {
   StockMovement          StockMovement[]
   StockReservation       StockReservation[]
   SupplierItem           SupplierItem?
+  SalesReturnOperationLine SalesReturnOperationLine[]
 
   @@unique([type, code])
   @@index([code])
@@ -1509,6 +1547,7 @@ model SalesDocumentLine {
   MdmItem         MdmItem       @relation(fields: [itemId], references: [id])
   SalesDocument   SalesDocument @relation(fields: [salesDocumentId], references: [id], onDelete: Cascade)
   warehouse       Warehouse?    @relation(fields: [warehouseId], references: [id])
+  SalesReturnOperationLine SalesReturnOperationLine[]
 
   @@index([date])
   @@index([itemId])
@@ -1538,6 +1577,7 @@ model SalesDocument {
   totalCogs           Decimal             @default(0) @db.Decimal(18, 2)
   financialDocumentId String?
   SalesDocumentLine   SalesDocumentLine[]
+  SalesReturnOperation SalesReturnOperation[]
   StatementLine       StatementLine[]     @relation("StatementLineToSalesDocument")
   Brand               Brand?              @relation(fields: [brandId], references: [id])
   Country             Country?            @relation(fields: [countryId], references: [id])
@@ -1553,6 +1593,58 @@ model SalesDocument {
   @@index([status])
   @@index([warehouseId])
   @@map("sales_documents")
+}
+
+model SalesReturnOperation {
+  id                    String                     @id @default(uuid())
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  saleId                String
+  legalEntityId         String
+  occurredAt            DateTime
+  status                SalesReturnOperationStatus @default(CREATED)
+  totalRefundBase       Decimal                    @default(0) @db.Decimal(18, 2)
+  totalCostReturnedBase Decimal                    @default(0) @db.Decimal(18, 2)
+  idempotencyKey        String                     @unique
+  postingRunId          String?
+  reason                String?
+  meta                  Json?
+
+  sale                  SalesDocument              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  legalEntity           LegalEntity                @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
+  lines                 SalesReturnOperationLine[]
+
+  @@index([saleId])
+  @@index([legalEntityId, occurredAt])
+  @@index([postingRunId])
+  @@map("sales_return_operations")
+}
+
+model SalesReturnOperationLine {
+  id                 String               @id @default(uuid())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  returnOperationId  String
+  saleLineId         String
+  itemId             String
+  warehouseId        String
+  quantity           Decimal              @db.Decimal(14, 4)
+  refundAmountBase   Decimal              @default(0) @db.Decimal(18, 2)
+  costBaseReturned   Decimal              @default(0) @db.Decimal(18, 2)
+  originalMovementId String?
+  meta               Json?
+
+  operation          SalesReturnOperation @relation(fields: [returnOperationId], references: [id], onDelete: Cascade)
+  saleLine           SalesDocumentLine    @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
+  item               MdmItem              @relation(fields: [itemId], references: [id])
+  warehouse          Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  originalMovement   StockMovement?       @relation(fields: [originalMovementId], references: [id], onDelete: SetNull)
+
+  @@index([returnOperationId])
+  @@index([saleLineId])
+  @@index([originalMovementId])
+  @@unique([returnOperationId, originalMovementId])
+  @@map("sales_return_operation_lines")
 }
 
 model ScmBomItem {
@@ -1650,23 +1742,6 @@ model ScmServiceOperation {
   @@index([supplierServiceId])
   @@index([supplyId])
   @@map("scm_service_operations")
-}
-
-model ScmStock {
-  id          String    @id @default(uuid())
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  warehouseId String
-  quantity    Decimal   @db.Decimal(14, 4)
-  unit        String
-  itemId      String
-  MdmItem     MdmItem   @relation(fields: [itemId], references: [id])
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-
-  @@unique([warehouseId, itemId])
-  @@index([itemId])
-  @@index([warehouseId])
-  @@map("scm_stocks")
 }
 
 model ScmSupply {
@@ -1847,6 +1922,8 @@ model StockBatch {
   inboundUnitCost       Decimal?             @db.Decimal(18, 4)
   logisticsUnitCost     Decimal?             @db.Decimal(18, 4)
   unitCostBase          Decimal?             @db.Decimal(18, 6)
+  /// FX rate fixed on batch creation: 1 <batch currency> = fxRateToBase * <FINANCE_BASE_CURRENCY>.
+  fxRateToBase          Decimal?             @db.Decimal(18, 8)
   MdmItem               MdmItem              @relation(fields: [itemId], references: [id])
   ProductionOrderItem   ProductionOrderItem? @relation(fields: [productionOrderItemId], references: [id])
   ScmSupplyItem         ScmSupplyItem?       @relation(fields: [supplyItemId], references: [id])
@@ -1880,6 +1957,7 @@ model StockMovement {
   productionBatchId                                                                     String?
   sourceDocId                                                                           String?
   sourceDocType                                                                         AccountingDocType?
+  idempotencyKey                                                                        String?
   InventoryAccountingLink                                                               InventoryAccountingLink[]
   inventory_transactions_inventory_transactions_stockMovementIdTostock_movements        InventoryTransaction[]          @relation("inventory_transactions_stockMovementIdTostock_movements")
   StockBatche                                                                           StockBatch?                     @relation(fields: [batchId], references: [id])
@@ -1891,7 +1969,9 @@ model StockMovement {
   ProductionOrderItem                                                                   ProductionOrderItem?            @relation(fields: [productionOrderItemId], references: [id])
   ScmSupplyItem                                                                         ScmSupplyItem?                  @relation(fields: [supplyItemId], references: [id])
   warehouse                                                                             Warehouse                       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  SalesReturnOperationLine                                                             SalesReturnOperationLine[]
 
+  @@unique([idempotencyKey])
   @@index([consumptionOperationId])
   @@index([docId])
   @@index([supplyReceiptId])
@@ -1900,6 +1980,7 @@ model StockMovement {
   @@index([itemId])
   @@index([productionBatchId])
   @@index([warehouseId])
+  @@index([idempotencyKey])
   @@map("stock_movements")
 }
 
@@ -2111,13 +2192,14 @@ model Warehouse {
   production_orders_production_orders_warehouseIdTowarehouses                 ProductionOrder[]      @relation("production_orders_warehouseIdTowarehouses")
   SalesDocumentLine                                                           SalesDocumentLine[]
   SalesDocument                                                               SalesDocument[]
-  ScmStock                                                                    ScmStock[]
+  // ScmStock removed (TZ 9): InventoryBalance/StockBatch/StockMovement are canonical
   ScmSupply                                                                   ScmSupply[]
   scm_transfers_scm_transfers_fromWarehouseIdTowarehouses                     ScmTransfer[]          @relation("scm_transfers_fromWarehouseIdTowarehouses")
   scm_transfers_scm_transfers_toWarehouseIdTowarehouses                       ScmTransfer[]          @relation("scm_transfers_toWarehouseIdTowarehouses")
   StockBatche                                                                 StockBatch[]
   StockMovement                                                               StockMovement[]
   StockReservation                                                            StockReservation[]
+  SalesReturnOperationLine                                                    SalesReturnOperationLine[]
   Country                                                                     Country?               @relation(fields: [countryId], references: [id])
 
   @@index([countryId])
@@ -2141,6 +2223,7 @@ enum AccountingDocType {
   STOCK_TRANSFER
   STOCK_ADJUSTMENT
   SALES_DOCUMENT
+  SALE_RETURN
   SUPPLY
   INVENTORY_ADJUSTMENT
   TEST_SEED
@@ -2346,6 +2429,7 @@ enum MovementDocType {
   PRODUCTION_INPUT
   PRODUCTION_OUTPUT
   SALE
+  SALE_RETURN
   ADJUSTMENT
   TRANSFER_OUT
   TRANSFER_IN
@@ -2413,6 +2497,11 @@ enum SalesDocumentStatus {
   VALIDATED
   POSTED
   CANCELLED
+}
+
+enum SalesReturnOperationStatus {
+  CREATED
+  POSTED
 }
 
 enum ScmComponentProvisionStatus {

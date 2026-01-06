@@ -54,17 +54,57 @@ export class PostingRunsService {
     });
     const nextVer = (max?._max?.version ?? 0) + 1;
 
-    return (client as any).accountingPostingRun.create({
-      data: {
-        id: crypto.randomUUID(),
-        legalEntityId: params.legalEntityId,
-        docType: params.docType,
-        docId: params.docId,
-        version: nextVer,
-        status: PostingRunStatus.POSTED,
-        postedAt: new Date(),
-      } as any,
-    });
+    try {
+      return await (client as any).accountingPostingRun.create({
+        data: {
+          id: crypto.randomUUID(),
+          legalEntityId: params.legalEntityId,
+          docType: params.docType,
+          docId: params.docId,
+          version: nextVer,
+          status: PostingRunStatus.POSTED,
+          postedAt: new Date(),
+        } as any,
+      });
+    } catch (e: any) {
+      // Handle race condition: another request created the run with same version
+      if (e?.code === 'P2002') {
+        // Re-read to get the actual latest run
+        const again = await this.getActivePostedRun(params);
+        if (again) return again;
+        // If still not found, try to get max version again and retry once
+        const maxAgain = await (client as any).accountingPostingRun.aggregate({
+          where: {
+            legalEntityId: params.legalEntityId,
+            docType: params.docType,
+            docId: params.docId,
+          } as any,
+          _max: { version: true },
+        });
+        const nextVerAgain = (maxAgain?._max?.version ?? 0) + 1;
+        try {
+          return await (client as any).accountingPostingRun.create({
+            data: {
+              id: crypto.randomUUID(),
+              legalEntityId: params.legalEntityId,
+              docType: params.docType,
+              docId: params.docId,
+              version: nextVerAgain,
+              status: PostingRunStatus.POSTED,
+              postedAt: new Date(),
+            } as any,
+          });
+        } catch (e2: any) {
+          // Final retry: just return existing if any
+          const final = await this.getActivePostedRun(params);
+          if (final) return final;
+          throw new ConflictException(
+            'Failed to create posting run due to concurrent access',
+          );
+        }
+      }
+      throw e;
+    }
   }
 
   async createNextRun(params: {
@@ -84,18 +124,63 @@ export class PostingRunsService {
       _max: { version: true },
     });
     const nextVer = (max?._max?.version ?? 0) + 1;
-    return (client as any).accountingPostingRun.create({
-      data: {
-        id: crypto.randomUUID(),
-        legalEntityId: params.legalEntityId,
-        docType: params.docType,
-        docId: params.docId,
-        version: nextVer,
-        status: PostingRunStatus.POSTED,
-        postedAt: new Date(),
-        repostedFromRunId: params.repostedFromRunId ?? null,
-      } as any,
-    });
+    try {
+      return await (client as any).accountingPostingRun.create({
+        data: {
+          id: crypto.randomUUID(),
+          legalEntityId: params.legalEntityId,
+          docType: params.docType,
+          docId: params.docId,
+          version: nextVer,
+          status: PostingRunStatus.POSTED,
+          postedAt: new Date(),
+          repostedFromRunId: params.repostedFromRunId ?? null,
+        } as any,
+      });
+    } catch (e: any) {
+      // Handle race condition: another request created the run with same version
+      if (e?.code === 'P2002') {
+        // Re-read to get the actual latest run
+        const maxAgain = await (client as any).accountingPostingRun.aggregate({
+          where: {
+            legalEntityId: params.legalEntityId,
+            docType: params.docType,
+            docId: params.docId,
+          } as any,
+          _max: { version: true },
+        });
+        const nextVerAgain = (maxAgain?._max?.version ?? 0) + 1;
+        try {
+          return await (client as any).accountingPostingRun.create({
+            data: {
+              id: crypto.randomUUID(),
+              legalEntityId: params.legalEntityId,
+              docType: params.docType,
+              docId: params.docId,
+              version: nextVerAgain,
+              status: PostingRunStatus.POSTED,
+              postedAt: new Date(),
+              repostedFromRunId: params.repostedFromRunId ?? null,
+            } as any,
+          });
+        } catch (e2: any) {
+          // If still fails, return the existing run with max version
+          const existing = await (client as any).accountingPostingRun.findFirst({
+            where: {
+              legalEntityId: params.legalEntityId,
+              docType: params.docType,
+              docId: params.docId,
+            } as any,
+            orderBy: [{ version: 'desc' }],
+          });
+          if (existing) return existing;
+          throw new ConflictException(
+            'Failed to create posting run due to concurrent access',
+          );
+        }
+      }
+      throw e;
+    }
   }
 
   async hasEntries(params: { runId: string; tx?: Prisma.TransactionClient }) {
@@ -217,4 +302,5 @@ export class PostingRunsService {
     };
   }
 }
+
 

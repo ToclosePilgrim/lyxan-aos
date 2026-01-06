@@ -11,3 +11,6 @@ import { LegalEntitiesService } from './legal-entities.service';
 })
 export class LegalEntitiesModule {}
 
+
+
+

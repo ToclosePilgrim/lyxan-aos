@@ -18,3 +18,6 @@ export class CreateCashflowCategoryDto {
   isTransfer?: boolean;
 }
 
+
+
+

@@ -44,7 +44,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-lc", "cd /app/backend && pnpm exec prisma migrate deploy"]
+    command: ["sh", "-lc", "cd /app/backend && pnpm exec prisma migrate deploy && pnpm exec prisma generate"]
     networks:
       - aos-staging-net
 
@@ -109,6 +109,8 @@ networks:
 
 volumes:
   postgres_data_staging:
+
+
 
 
 

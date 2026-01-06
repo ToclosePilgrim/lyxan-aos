@@ -5,3 +5,6 @@ export class UpdateRecurringJournalDto extends PartialType(
   CreateRecurringJournalDto,
 ) {}
 
+
+
+
