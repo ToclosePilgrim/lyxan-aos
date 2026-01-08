@@ -609,7 +609,7 @@ export class ProductionConsumptionService {
           batchId: true,
           meta: true,
           StockBatche: { select: { unitCostBase: true } },
-        } as any,
+        },
       });
       if (!movements.length) {
         throw new BadRequestException(

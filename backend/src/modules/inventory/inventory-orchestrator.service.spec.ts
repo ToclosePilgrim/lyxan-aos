@@ -62,7 +62,11 @@ describe('InventoryOrchestratorService - Idempotency', () => {
         create: jest.fn(),
       },
       stockMovement: {
+        findMany: jest.fn(),
         update: jest.fn(),
+      },
+      stockBatch: {
+        findMany: jest.fn(),
       },
       inventoryBalance: {
         upsert: jest.fn(),
@@ -207,13 +211,12 @@ describe('InventoryOrchestratorService - Idempotency', () => {
       const existingTxn = {
         id: 'txn-existing',
         idempotencyKey,
-        stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions:
-          existingMovements,
       };
 
       mockTx.inventoryTransaction.findUnique.mockResolvedValueOnce(
         existingTxn as any,
       );
+      mockTx.stockMovement.findMany.mockResolvedValueOnce(existingMovements as any);
 
       const result = await service.recordOutcome(
         {

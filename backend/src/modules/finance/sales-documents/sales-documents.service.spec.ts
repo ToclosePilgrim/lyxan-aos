@@ -225,7 +225,7 @@ describe('SalesDocumentsService (TZ 10 sales posting MVP)', () => {
       getOrCreatePostedRun: jest.fn().mockResolvedValue({ id: 'run-ret-1', status: PostingRunStatus.POSTED }),
     };
     const validationMock: any = {
-      validatePostingRunBalance: jest.fn().mockResolvedValue(undefined),
+      maybeValidateDocumentBalanceOnPost: jest.fn().mockResolvedValue(undefined),
     };
     const inventoryOrchestratorMock: any = {
       recordIncome: jest.fn().mockResolvedValue({

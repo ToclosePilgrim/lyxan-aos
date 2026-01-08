@@ -743,7 +743,7 @@ export class SalesDocumentsService {
       const movementAmountBase: Record<string, string> = {};
       const movementMeta: Record<
         string,
-        { inventoryTransactionId?: string | null; batchId?: string | null }
+        { inventoryTransactionId: string | null; batchId: string | null }
       > = {};
 
       let totalRefundBase = new Prisma.Decimal(0);
@@ -912,21 +912,23 @@ export class SalesDocumentsService {
               },
               sourceDocType: AccountingDocType.SALE_RETURN,
               sourceDocId: op.id,
-            } as any,
-            tx as any,
+            },
+            tx,
           );
 
-          const mv = await tx.stockMovement.findUnique({
-            where: { id: (income as any).movementId },
-            select: { id: true, inventoryTransactionId: true, batchId: true } as any,
-          });
-          if (mv) {
-            createdMovementIds.push(mv.id);
-            movementAmountBase[mv.id] = sliceCost2.toString();
-            movementMeta[mv.id] = {
-              inventoryTransactionId: mv.inventoryTransactionId ?? null,
-              batchId: mv.batchId ?? null,
-            };
+          if (income.movementId) {
+            const mv = await tx.stockMovement.findUnique({
+              where: { id: income.movementId },
+              select: { id: true, inventoryTransactionId: true, batchId: true },
+            });
+            if (mv) {
+              createdMovementIds.push(mv.id);
+              movementAmountBase[mv.id] = sliceCost2.toString();
+              movementMeta[mv.id] = {
+                inventoryTransactionId: mv.inventoryTransactionId ?? null,
+                batchId: mv.batchId ?? null,
+              };
+            }
           }
         }
       }
@@ -1058,10 +1060,12 @@ export class SalesDocumentsService {
       }
 
       // Always-on validation (prod): posting run must balance.
-      await this.validation.validatePostingRunBalance({
+      await this.validation.maybeValidateDocumentBalanceOnPost({
         tx,
+        docType: AccountingDocType.SALE_RETURN,
+        docId: op.id,
         postingRunId: run.id,
-      } as any);
+      });
 
       await (tx as any).salesReturnOperation.update({
         where: { id: op.id },

@@ -1,5 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { AccountingDocType, InventoryDirection, Prisma } from '@prisma/client';
+import {
+  AccountingDocType,
+  InventoryDirection,
+  Prisma,
+  StockMovement,
+} from '@prisma/client';
 import { FifoInventoryService } from './fifo.service';
 import { InventoryService } from './inventory.service';
 import { InventoryEventsService } from './inventory-events.service';
@@ -41,6 +46,16 @@ export interface MovementOperation {
   sourceDocId?: string;
 }
 
+export type InventoryOutcomeResult = {
+  movementIds: string[];
+  movements: StockMovement[];
+  transactionId: string;
+  totalCost: Prisma.Decimal;
+  totalCostBase: Prisma.Decimal;
+  currency: string;
+  baseCurrency: string;
+};
+
 @Injectable()
 export class InventoryOrchestratorService {
   constructor(
@@ -48,6 +63,57 @@ export class InventoryOrchestratorService {
     private readonly inventory: InventoryService,
     private readonly inventoryEvents: InventoryEventsService,
   ) {}
+
+  private async computeTotalCostBaseFromMovements(
+    tx: Prisma.TransactionClient,
+    movements: StockMovement[],
+  ): Promise<Prisma.Decimal> {
+    // Prefer explicit per-movement lineCostBase from meta (canonical),
+    // fallback to StockBatch.unitCostBase * abs(qty).
+    const base = new Prisma.Decimal(0);
+    const byBatch = new Map<string, Prisma.Decimal>();
+
+    let total = base;
+    const batchIds: string[] = [];
+
+    for (const m of movements) {
+      const meta: any = (m as any)?.meta ?? {};
+      const lineCostBaseStr =
+        meta && typeof meta.lineCostBase === 'string' ? meta.lineCostBase : null;
+      if (lineCostBaseStr) {
+        total = total.add(new Prisma.Decimal(lineCostBaseStr));
+        continue;
+      }
+      if (m.batchId) batchIds.push(m.batchId);
+    }
+
+    if (!batchIds.length) return total;
+
+    const uniqueBatchIds = Array.from(new Set(batchIds));
+    const batches = await tx.stockBatch.findMany({
+      where: { id: { in: uniqueBatchIds } },
+      select: { id: true, unitCostBase: true },
+    });
+    for (const b of batches as any[]) {
+      if (b.unitCostBase !== null && b.unitCostBase !== undefined) {
+        byBatch.set(b.id, new Prisma.Decimal(b.unitCostBase));
+      }
+    }
+
+    for (const m of movements) {
+      const meta: any = (m as any)?.meta ?? {};
+      const lineCostBaseStr =
+        meta && typeof meta.lineCostBase === 'string' ? meta.lineCostBase : null;
+      if (lineCostBaseStr) continue; // already counted
+      if (!m.batchId) continue;
+      const unitCostBase = byBatch.get(m.batchId);
+      if (!unitCostBase) continue;
+      const qtyAbs = new Prisma.Decimal((m as any).quantity).abs();
+      total = total.add(unitCostBase.mul(qtyAbs));
+    }
+
+    return total;
+  }
 
   private async adjustBalanceWithTx(
     tx: Prisma.TransactionClient,
@@ -200,7 +266,10 @@ export class InventoryOrchestratorService {
     return { movementId: income.id, transactionId: txn.id };
   }
 
-  async recordOutcome(op: MovementOperation, tx: Prisma.TransactionClient) {
+  async recordOutcome(
+    op: MovementOperation,
+    tx: Prisma.TransactionClient,
+  ): Promise<InventoryOutcomeResult> {
     // Build idempotency key for transaction
     const txnIdempotencyKey = buildInventoryTransactionIdempotencyKey({
       sourceDocType: op.docType,
@@ -212,39 +281,21 @@ export class InventoryOrchestratorService {
     // Check for existing transaction
     const existingTxn = await tx.inventoryTransaction.findUnique({
       where: { idempotencyKey: txnIdempotencyKey },
-      include: {
-        stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: {
-          include: { StockBatche: { select: { unitCostBase: true } } },
-        },
-      },
     });
 
     if (existingTxn) {
       // Idempotent: return existing transaction
       const baseCurrency = getBaseCurrency();
-      const totalCostBase =
-        existingTxn.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.reduce(
-          (sum, m: any) => {
-            const qty = new Prisma.Decimal(m.quantity).abs();
-            const metaLineCostBase =
-              m.meta && typeof (m.meta as any).lineCostBase === 'string'
-                ? new Prisma.Decimal((m.meta as any).lineCostBase)
-                : null;
-            if (metaLineCostBase) return sum.add(metaLineCostBase);
-            const unitCostBase =
-              m.StockBatche?.unitCostBase !== null &&
-              m.StockBatche?.unitCostBase !== undefined
-                ? new Prisma.Decimal(m.StockBatche.unitCostBase)
-                : null;
-            if (!unitCostBase) return sum;
-            return sum.add(unitCostBase.mul(qty));
-          },
-          new Prisma.Decimal(0),
-        );
+      const movements = await tx.stockMovement.findMany({
+        where: { inventoryTransactionId: existingTxn.id } as any,
+      });
+      const totalCostBase = await this.computeTotalCostBaseFromMovements(
+        tx,
+        movements,
+      );
       return {
-        movementIds: existingTxn.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.map(
-          (m) => m.id,
-        ),
+        movementIds: movements.map((m) => m.id),
+        movements,
         transactionId: existingTxn.id,
         totalCost: totalCostBase,
         totalCostBase,
@@ -294,28 +345,24 @@ export class InventoryOrchestratorService {
       if (e?.code === 'P2002') {
         const again = await tx.inventoryTransaction.findUnique({
           where: { idempotencyKey: txnIdempotencyKey },
-          include: {
-            stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions: true,
-          },
         });
         if (again) {
+          const movements = await tx.stockMovement.findMany({
+            where: { inventoryTransactionId: again.id } as any,
+          });
+          const baseCurrency = getBaseCurrency();
+          const totalCostBase = await this.computeTotalCostBaseFromMovements(
+            tx,
+            movements,
+          );
           return {
-            movementIds: again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.map(
-              (m) => m.id,
-            ),
+            movementIds: movements.map((m) => m.id),
+            movements,
             transactionId: again.id,
-            totalCost: again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions.reduce(
-              (sum, m) => {
-                const cost = m.costPerUnit
-                  ? new Prisma.Decimal(m.costPerUnit).mul(m.quantity.abs())
-                  : new Prisma.Decimal(0);
-                return sum.add(cost);
-              },
-              new Prisma.Decimal(0),
-            ),
-            currency:
-              again.stock_movements_stock_movements_inventoryTransactionIdToinventory_transactions[0]?.currency ??
-              'RUB',
+            totalCost: totalCostBase,
+            totalCostBase,
+            currency: baseCurrency,
+            baseCurrency,
           };
         }
         throw new ConflictException('Duplicate idempotencyKey for InventoryTransaction');
@@ -366,10 +413,11 @@ export class InventoryOrchestratorService {
 
     return {
       movementIds: outcome.movements.map((m) => m.id),
+      movements: outcome.movements,
       transactionId: txn.id,
       totalCost: outcome.totalCost,
       totalCostBase: outcome.totalCostBase,
-      currency: outcome.baseCurrency,
+      currency: outcome.currency,
       baseCurrency: outcome.baseCurrency,
     };
   }
