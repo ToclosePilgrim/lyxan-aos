@@ -31,4 +31,25 @@ Notes:
 - migrations are applied via `prisma migrate deploy`
 - Prisma client generation must happen before build/runtime as configured by infra/entrypoint/CI
 
+---
+
+## Local (fast path: `pnpm docker:up`)
+
+This uses `infra/docker-compose.yml` (the `pnpm docker:up` script does `cd infra && docker compose up --build`).
+
+1) Prepare backend env (required):
+
+- Copy `backend/.env.example` → `backend/.env`
+- Keep `AGENT_CALLBACK_HMAC_SECRET` set (required because compose sets `NODE_ENV=production`)
+
+2) Run:
+
+- `pnpm docker:up`
+
+3) Verify:
+
+- Backend health: `GET /api/health`, `GET /api/health/db`
+- Swagger: `/api/docs`
+
+
 

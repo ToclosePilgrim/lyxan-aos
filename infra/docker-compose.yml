@@ -41,8 +41,10 @@ services:
       dockerfile: infra/Dockerfile.backend
     container_name: aos-backend
     restart: unless-stopped
+    # Local dev default: keep required secrets close to backend.
+    # New dev flow: copy backend/.env.example -> backend/.env and run `pnpm docker:up`.
     env_file:
-      - ../.env
+      - ../backend/.env
     environment:
       NODE_ENV: production
       PORT: ${PORT:-3001}
@@ -74,8 +76,6 @@ services:
     restart: unless-stopped
     working_dir: /app/frontend
     command: ["pnpm", "start"]
-    env_file:
-      - ../.env
     environment:
       NODE_ENV: production
       PORT: ${FRONTEND_PORT:-3000}
@@ -98,8 +98,6 @@ services:
     image: n8nio/n8n:latest
     container_name: aos-n8n
     restart: unless-stopped
-    env_file:
-      - ../.env
     environment:
       N8N_HOST: "localhost"
       N8N_PORT: ${N8N_PORT:-5678}
