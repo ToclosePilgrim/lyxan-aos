@@ -60,7 +60,7 @@ describe('SCM ↔ BCM Link e2e', () => {
     // No Prisma cleanup here: e2e must not write to DB directly.
 
     if (app) {
-      await app.close();
+      if (app) await app.close();
     }
   });
 

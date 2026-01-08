@@ -91,7 +91,7 @@ describe('TZ 8.4.1 — AcquiringEvent posting via PostingRun + void (e2e)', () =
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('post creates PostingRun and entries have postingRunId; void creates reversal run/entries; repeated void is idempotent', async () => {

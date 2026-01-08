@@ -85,7 +85,7 @@ describe('TZ 8.4.3.1 — SupplyReceipt posting via PostingRun + void (e2e)', () 
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   async function createSupplyAndReceipt(): Promise<{

@@ -14,7 +14,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly isTestMode: boolean;
 
   constructor(private configService: ConfigService) {
-    this.isTestMode = process.env.NODE_ENV === 'test';
+    // Unit tests run with NODE_ENV=test and should not require a real Redis.
+    // E2E tests, however, rely on Redis for idempotency + replay protection.
+    this.isTestMode =
+      process.env.NODE_ENV === 'test' &&
+      String(process.env.AOS_E2E ?? '').toLowerCase() !== 'true';
 
     if (this.isTestMode) {
       this.logger.log('Redis disabled in test environment');

@@ -190,7 +190,7 @@ describe('PaymentExecution from PaymentPlan (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('executes plan -> execution + moneyTx + entry + link; updates statuses; idempotent on repeat', async () => {

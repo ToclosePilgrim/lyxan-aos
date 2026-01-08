@@ -59,7 +59,7 @@ describe('TZ 8.3.B.1B — CounterpartyOffers SERVICE creates SERVICE item (e2e)'
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('SERVICE offer without mdmItemId auto-creates MdmItemType.SERVICE', async () => {

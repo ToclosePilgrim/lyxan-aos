@@ -81,7 +81,7 @@ describe('TZ 5.3 — Acquiring clearing (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('posts captured/fee/settlement into clearing and clearing closes to zero; idempotent', async () => {

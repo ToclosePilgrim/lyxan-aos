@@ -216,7 +216,7 @@ describe('StatementLine confirm-match + post (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('posts matched execution line and is idempotent on repeat', async () => {

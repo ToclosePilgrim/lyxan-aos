@@ -41,7 +41,7 @@ describe('FinancialAccount CRUD (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('creates bank account, lists by legalEntityId, archives, and blocks duplicates by externalRef', async () => {

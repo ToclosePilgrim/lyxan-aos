@@ -112,7 +112,7 @@ describe('TZ 8 — FIFO mixed currencies -> totalCostBase in base currency (e2e)
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   async function receiveSupply(params: {

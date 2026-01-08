@@ -278,7 +278,7 @@ describe('TZ 7.3 — unified explain drilldown (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('BS explain returns entry lines with primary refs including FinancialDocument, PaymentExecution, and StatementLine/AcquiringEvent', async () => {

@@ -61,7 +61,7 @@ describe('Statements import (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) if (app) await app.close();
   });
 
   it('imports 3 lines; reimport same batch is idempotent; line-level dedup works; currency mismatch is 400', async () => {
@@ -105,86 +105,6 @@ describe('Statements import (e2e)', () => {
 
     expect(imp1.body.statementId).toBeDefined();
     expect(imp1.body.createdLines).toBe(3);
-
-    const stmtId = imp1.body.statementId;
-    const linesDb = await prisma.statementLine.findMany({
-      where: { statementId: stmtId },
-      orderBy: { lineIndex: 'asc' },
-    });
-    expect(linesDb.length).toBe(3);
-    expect(linesDb[0].status).toBe(StatementLineStatus.NEW);
-    expect(linesDb[0].amountBase).toBeDefined();
-
-    // Reimport same batch (same importHash) -> no new lines
-    const imp1b = await request()
-      .post('/api/finance/statements/import')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        accountId: account.id,
-        provider: StatementProvider.BANK,
-        sourceName: 'Sber',
-        importHash: 'h1',
-        lines: [l1, l2, l3],
-      })
-      .expect(200);
-    expect(imp1b.body.alreadyImported).toBe(true);
-    expect(imp1b.body.createdLines).toBe(0);
-
-    // Second batch with 1 duplicate by externalLineId and 2 new
-    const l4dup = { ...l1, description: 'Incoming 1 DUP' }; // same externalLineId ext-1
-    const l5 = {
-      occurredAt: new Date(now.getTime() - 30_000).toISOString(),
-      direction: MoneyTransactionDirection.OUT,
-      amount: '20',
-      currency: 'RUB',
-      description: 'Payment',
-      externalLineId: 'ext-5',
-    };
-    const l6 = {
-      occurredAt: new Date(now.getTime() - 20_000).toISOString(),
-      direction: MoneyTransactionDirection.IN,
-      amount: '300',
-      currency: 'RUB',
-      description: 'Incoming 3',
-    };
-
-    const imp2 = await request()
-      .post('/api/finance/statements/import')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        accountId: account.id,
-        provider: StatementProvider.BANK,
-        sourceName: 'Sber',
-        importHash: 'h2',
-        lines: [l4dup, l5, l6],
-      })
-      .expect(200);
-
-    expect(imp2.body.createdLines).toBe(2);
-
-    const totalLines = await prisma.statementLine.count({
-      where: { accountId: account.id },
-    });
-    expect(totalLines).toBe(5);
-
-    // Currency mismatch -> 400
-    await request()
-      .post('/api/finance/statements/import')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        accountId: account.id,
-        provider: StatementProvider.BANK,
-        importHash: 'h3',
-        lines: [
-          {
-            occurredAt: new Date().toISOString(),
-            direction: MoneyTransactionDirection.IN,
-            amount: '1',
-            currency: 'USD',
-          },
-        ],
-      })
-      .expect(400);
 
     const stmtId = imp1.body.statementId;
     const linesDb = await prisma.statementLine.findMany({

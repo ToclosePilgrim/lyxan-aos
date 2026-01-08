@@ -108,7 +108,7 @@ describe('Marketplace payout transfer (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('pairs wallet OUT + bank IN and posts transfer entries + links idempotently', async () => {

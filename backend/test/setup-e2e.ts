@@ -1,9 +1,10 @@
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import bcrypt from 'bcrypt';
+import path from 'node:path';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
+import { Client } from 'pg';
 import supertest from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TestSeedModule } from '../src/modules/devtools/test-seed/test-seed.module';
@@ -26,61 +27,156 @@ beforeAll(async () => {
   process.__AOS_E2E_SETUP_DONE__ = true;
 
   // Provide sane defaults for local runs
+  process.env.AOS_E2E = 'true';
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'e2e-test-secret';
-  process.env.DATABASE_URL =
+  const e2eDatabaseUrl =
+    process.env.E2E_DATABASE_URL ||
     process.env.TEST_DATABASE_URL ||
     process.env.DATABASE_URL ||
-    'postgresql://aos:aos@localhost:5433/aosdb?schema=public';
+    'postgresql://aos:aos@localhost:5433/aosdb_e2e_smoke?schema=public';
+  process.env.DATABASE_URL = e2eDatabaseUrl;
 
-  // Apply migrations
-  execSync('pnpm exec prisma migrate deploy', { stdio: 'inherit' });
+  function assertSafeE2eDatabaseName(dbName: string) {
+    // Guardrail: never auto-create/drop a non-e2e database by accident
+    if (!/e2e/i.test(dbName)) {
+      throw new Error(
+        `[e2e] Refusing to auto-create/reset non-e2e database "${dbName}". ` +
+          `Set E2E_DATABASE_URL/TEST_DATABASE_URL to an e2e db name (e.g. *_e2e_*).`,
+      );
+    }
+  }
 
-  // Minimal seed for auth
+  async function resetDatabase(databaseUrl: string) {
+    const url = new URL(databaseUrl);
+    const dbName = decodeURIComponent(url.pathname.replace(/^\//, ''));
+    if (!dbName) {
+      throw new Error(`Invalid DATABASE_URL (missing db name): ${databaseUrl}`);
+    }
+    assertSafeE2eDatabaseName(dbName);
+
+    const maintenanceUrl = new URL(databaseUrl);
+    maintenanceUrl.pathname = '/postgres';
+
+    console.log(`[e2e] Resetting database "${dbName}"...`);
+    const client = new Client({ connectionString: maintenanceUrl.toString() });
+    await client.connect();
+    try {
+      const escaped = dbName.replace(/"/g, '""');
+      // Postgres 15 supports WITH (FORCE) which terminates existing connections.
+      await client.query(`DROP DATABASE IF EXISTS "${escaped}" WITH (FORCE)`);
+      await client.query(`CREATE DATABASE "${escaped}"`);
+    } finally {
+      await client.end();
+    }
+  }
+
+  async function ensureDatabaseExists(databaseUrl: string) {
+    const url = new URL(databaseUrl);
+    const dbName = decodeURIComponent(url.pathname.replace(/^\//, ''));
+    if (!dbName) {
+      throw new Error(`Invalid DATABASE_URL (missing db name): ${databaseUrl}`);
+    }
+    assertSafeE2eDatabaseName(dbName);
+
+    const maintenanceUrl = new URL(databaseUrl);
+    maintenanceUrl.pathname = '/postgres';
+
+    const client = new Client({ connectionString: maintenanceUrl.toString() });
+    await client.connect();
+    try {
+      const existsRes = await client.query(
+        'SELECT 1 FROM pg_database WHERE datname = $1',
+        [dbName],
+      );
+      if (existsRes.rowCount && existsRes.rowCount > 0) {
+        return;
+      }
+
+      const escaped = dbName.replace(/"/g, '""');
+      console.log(
+        `[e2e] Database "${dbName}" does not exist. Creating it...`,
+      );
+      await client.query(`CREATE DATABASE "${escaped}"`);
+      console.log(`[e2e] Database "${dbName}" created.`);
+    } finally {
+      await client.end();
+    }
+  }
+
+  const preserveDb =
+    String(process.env.E2E_DB_PRESERVE ?? '').toLowerCase() === 'true';
+  if (preserveDb) {
+    await ensureDatabaseExists(e2eDatabaseUrl);
+  } else {
+    await resetDatabase(e2eDatabaseUrl);
+  }
+
+  // Apply migrations (to e2e DB)
+  const backendRoot = path.resolve(__dirname, '..');
+  const runMigrateDeploy = () => {
+    const res = spawnSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
+      cwd: backendRoot,
+      env: { ...process.env, DATABASE_URL: e2eDatabaseUrl },
+      encoding: 'utf8',
+      shell: true,
+    });
+    if (res.error) {
+      process.stderr.write(
+        `[e2e] Failed to execute pnpm (migrate deploy): ${String(res.error)}\n`,
+      );
+    }
+    if (res.stdout) process.stdout.write(res.stdout);
+    if (res.stderr) process.stderr.write(res.stderr);
+    return res;
+  };
+
+  const first = runMigrateDeploy();
+  if (first.status !== 0) {
+    const combined = `${first.stdout ?? ''}\n${first.stderr ?? ''}`;
+    if (/P3009/.test(combined)) {
+      // This can happen if a previous e2e run got interrupted mid-migration.
+      // For e2e DBs it's safe and preferable to reset to a clean slate.
+      await resetDatabase(e2eDatabaseUrl);
+
+      const second = runMigrateDeploy();
+      if (second.status !== 0) {
+        throw new Error('Command failed: pnpm exec prisma migrate deploy');
+      }
+    } else {
+      throw new Error('Command failed: pnpm exec prisma migrate deploy');
+    }
+  }
+
+  // Seed baseline reference data used by many e2e tests (brands, countries, marketplaces, admin user, etc).
+  const seed = spawnSync('pnpm', ['exec', 'ts-node', '-T', 'src/seeds/seed.ts'], {
+    cwd: backendRoot,
+    env: { ...process.env, DATABASE_URL: e2eDatabaseUrl },
+    encoding: 'utf8',
+    shell: true,
+  });
+  if (seed.error) {
+    process.stderr.write(
+      `[e2e] Failed to execute pnpm (seed): ${String(seed.error)}\n`,
+    );
+  }
+  if (seed.stdout) process.stdout.write(seed.stdout);
+  if (seed.stderr) process.stderr.write(seed.stderr);
+  if (seed.status !== 0) {
+    throw new Error('Command failed: pnpm exec ts-node -T src/seeds/seed.ts');
+  }
+
   // IMPORTANT: PrismaClient must be generated before running e2e (handled by pnpm scripts).
 
   const { PrismaClient } = require('@prisma/client');
   const prisma = new PrismaClient();
   try {
-    // Roles required by e2e tests
-    const adminRole = await prisma.role.upsert({
-      where: { name: 'Admin' },
-      update: {},
-      create: {
-        id: crypto.randomUUID(),
-        name: 'Admin',
-        updatedAt: new Date(),
-      },
-    });
-
-    await prisma.role.upsert({
-      where: { name: 'Manager' },
-      update: {},
-      create: {
-        id: crypto.randomUUID(),
-        name: 'Manager',
-        updatedAt: new Date(),
-      },
-    });
-
+    // Extra role required by some finance tests
     await prisma.role.upsert({
       where: { name: 'FinanceManager' },
       update: {},
       create: {
         id: crypto.randomUUID(),
         name: 'FinanceManager',
-        updatedAt: new Date(),
-      },
-    });
-
-    const password = await bcrypt.hash('Tairai123', 10);
-    await prisma.user.upsert({
-      where: { email: 'admin@aos.local' },
-      update: { password, roleId: adminRole.id, updatedAt: new Date() },
-      create: {
-        id: crypto.randomUUID(),
-        email: 'admin@aos.local',
-        password,
-        roleId: adminRole.id,
         updatedAt: new Date(),
       },
     });

@@ -67,7 +67,7 @@ describe('PaymentRequest + approvals (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('creates DRAFT, submit->SUBMITTED, approve->APPROVED; validates basis and status transitions', async () => {
@@ -128,6 +128,7 @@ describe('PaymentRequest + approvals (e2e)', () => {
     expect(approved.body.status).toBe(PaymentRequestStatus.APPROVED);
   });
 });
+
 
 
 

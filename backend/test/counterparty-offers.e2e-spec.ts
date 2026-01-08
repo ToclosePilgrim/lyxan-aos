@@ -60,7 +60,7 @@ describe('TZ 8.3.B.1 — CounterpartyOffers API smoke (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('create (with mdmItemId) + idempotency by externalRef + list/search + archive + create (auto item)', async () => {

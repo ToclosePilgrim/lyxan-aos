@@ -90,7 +90,7 @@ describe('TZ 8.4.3.2 — Production consumption PostingRun + void (e2e)', () => 
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   async function seedStockAndCreateProduct() {
@@ -290,6 +290,7 @@ describe('TZ 8.4.3.2 — Production consumption PostingRun + void (e2e)', () => 
       .expect(409);
   }, 120_000);
 });
+
 
 
 

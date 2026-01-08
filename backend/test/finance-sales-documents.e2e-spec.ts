@@ -93,7 +93,7 @@ describe('Finance Sales Documents (API-only e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('creates SalesDocument via API and posts marketplace fee entries idempotently', async () => {
@@ -158,6 +158,7 @@ describe('Finance Sales Documents (API-only e2e)', () => {
     expect(entries2.length).toBe(entries1.length);
   });
 });
+
 
 
 

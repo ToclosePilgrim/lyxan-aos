@@ -99,7 +99,7 @@ describe('Finance PnL (ledger-based)', () => {
   afterAll(async () => {
     delete process.env.ENABLE_TEST_SEED_API;
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should calculate P&L from accounting entries', async () => {

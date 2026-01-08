@@ -70,6 +70,6 @@ describe('TZ 8.3.B.1 — SCM wiring smoke (e2e)', () => {
       })
       .expect(201);
 
-    await app.close();
+    if (app) await app.close();
   });
 });

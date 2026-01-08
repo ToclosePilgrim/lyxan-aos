@@ -17,7 +17,7 @@ describe('TZ 7 — Finance balance validation ALWAYS ON (e2e)', () => {
   const prisma = new PrismaClient();
 
   afterAll(async () => {
-    if (app) await app.close();
+    if (app) if (app) await app.close();
     await prisma.$disconnect();
   });
 
@@ -140,5 +140,6 @@ describe('TZ 7 — Finance balance validation ALWAYS ON (e2e)', () => {
     expect(docAfter?.status).toBe('DRAFT');
   }, 120_000);
 });
+
 
 

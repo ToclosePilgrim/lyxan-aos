@@ -152,7 +152,7 @@ describe('Payment Calendar (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('calendar returns items+day totals; move keeps audit; backlog includes approved w/o plans', async () => {
@@ -206,6 +206,7 @@ describe('Payment Calendar (e2e)', () => {
     expect(plan2.id).toBeDefined();
   });
 });
+
 
 
 

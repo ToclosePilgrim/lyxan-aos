@@ -194,7 +194,7 @@ describe('TZ 8.3.B.2 — Production provisioning API (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('start without provision -> 409; provision -> 200; start -> 200', async () => {

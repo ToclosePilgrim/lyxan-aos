@@ -46,7 +46,7 @@ describe('Product Content Versions e2e', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should create a listing and initial SYSTEM version', async () => {

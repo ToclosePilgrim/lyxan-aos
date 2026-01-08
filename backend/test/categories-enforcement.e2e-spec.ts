@@ -135,7 +135,7 @@ describe('TZ 6.1 — categories enforcement + defaults (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('FinancialDocument RENT without explicit cashflowCategoryId -> defaults applied; pnl required and defaulted', async () => {

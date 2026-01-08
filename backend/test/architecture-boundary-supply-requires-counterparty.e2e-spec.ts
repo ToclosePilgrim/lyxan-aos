@@ -78,6 +78,6 @@ describe('Architecture Boundary: SCM supply requires Counterparty(role=SUPPLIER)
       })
       .expect(201);
 
-    await app.close();
+    if (app) await app.close();
   });
 });

@@ -1,6 +1,7 @@
 import { createTestApp } from './setup-e2e';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { seedCountry, seedLegalEntity } from './api-seed';
 
 describe('Idempotency (e2e)', () => {
   let prisma: PrismaClient;
@@ -18,10 +19,26 @@ describe('Idempotency (e2e)', () => {
       const { app, request, loginAsAdmin } = await createTestApp();
       const token = await loginAsAdmin();
 
+      const ts = Date.now();
+      const country = await seedCountry({
+        request,
+        token,
+        code: `ID-${ts}`,
+        name: 'Idempotency Country',
+      });
+      const legalEntity = await seedLegalEntity({
+        request,
+        token,
+        code: `LE-ID-${ts}`,
+        name: `LE Idempotency ${ts}`,
+        countryCode: country.code,
+      });
+
       const idempotencyKey = `test-finance-${crypto.randomUUID()}`;
       const payload = {
+        legalEntityId: legalEntity.id,
         type: 'SUPPLY_INVOICE',
-        direction: 'INBOUND',
+        direction: 'INCOMING',
         currency: 'RUB',
         amountTotal: '1000.00',
         status: 'DRAFT',
@@ -41,7 +58,7 @@ describe('Idempotency (e2e)', () => {
 
       const documentId = res.body.id;
 
-      await app.close();
+      if (app) await app.close();
 
       // Verify document was created
       const doc = await prisma.financialDocument.findUnique({
@@ -54,10 +71,26 @@ describe('Idempotency (e2e)', () => {
       const { app, request, loginAsAdmin } = await createTestApp();
       const token = await loginAsAdmin();
 
+      const ts = Date.now();
+      const country = await seedCountry({
+        request,
+        token,
+        code: `IDR-${ts}`,
+        name: 'Idempotency Country Replay',
+      });
+      const legalEntity = await seedLegalEntity({
+        request,
+        token,
+        code: `LE-IDR-${ts}`,
+        name: `LE Idempotency Replay ${ts}`,
+        countryCode: country.code,
+      });
+
       const idempotencyKey = `test-finance-replay-${crypto.randomUUID()}`;
       const payload = {
+        legalEntityId: legalEntity.id,
         type: 'SUPPLY_INVOICE',
-        direction: 'INBOUND',
+        direction: 'INCOMING',
         currency: 'RUB',
         amountTotal: '2000.00',
         status: 'DRAFT',
@@ -95,17 +128,33 @@ describe('Idempotency (e2e)', () => {
       });
       expect(count).toBe(1);
 
-      await app.close();
+      if (app) await app.close();
     });
 
     it('should reject request with same key but different body', async () => {
       const { app, request, loginAsAdmin } = await createTestApp();
       const token = await loginAsAdmin();
 
+      const ts = Date.now();
+      const country = await seedCountry({
+        request,
+        token,
+        code: `IDC-${ts}`,
+        name: 'Idempotency Country Conflict',
+      });
+      const legalEntity = await seedLegalEntity({
+        request,
+        token,
+        code: `LE-IDC-${ts}`,
+        name: `LE Idempotency Conflict ${ts}`,
+        countryCode: country.code,
+      });
+
       const idempotencyKey = `test-finance-conflict-${crypto.randomUUID()}`;
       const payload1 = {
+        legalEntityId: legalEntity.id,
         type: 'SUPPLY_INVOICE',
-        direction: 'INBOUND',
+        direction: 'INCOMING',
         currency: 'RUB',
         amountTotal: '3000.00',
         status: 'DRAFT',
@@ -123,8 +172,9 @@ describe('Idempotency (e2e)', () => {
 
       // Second request with same key but different body
       const payload2 = {
+        legalEntityId: legalEntity.id,
         type: 'SUPPLY_INVOICE',
-        direction: 'INBOUND',
+        direction: 'INCOMING',
         currency: 'RUB',
         amountTotal: '4000.00', // Different amount
         status: 'DRAFT',
@@ -139,17 +189,33 @@ describe('Idempotency (e2e)', () => {
         .send(payload2String)
         .expect(409); // Conflict
 
-      await app.close();
+      if (app) await app.close();
     });
 
     it('should handle parallel requests correctly', async () => {
       const { app, request, loginAsAdmin } = await createTestApp();
       const token = await loginAsAdmin();
 
+      const ts = Date.now();
+      const country = await seedCountry({
+        request,
+        token,
+        code: `IDP-${ts}`,
+        name: 'Idempotency Country Parallel',
+      });
+      const legalEntity = await seedLegalEntity({
+        request,
+        token,
+        code: `LE-IDP-${ts}`,
+        name: `LE Idempotency Parallel ${ts}`,
+        countryCode: country.code,
+      });
+
       const idempotencyKey = `test-finance-parallel-${crypto.randomUUID()}`;
       const payload = {
+        legalEntityId: legalEntity.id,
         type: 'SUPPLY_INVOICE',
-        direction: 'INBOUND',
+        direction: 'INCOMING',
         currency: 'RUB',
         amountTotal: '5000.00',
         status: 'DRAFT',
@@ -192,7 +258,7 @@ describe('Idempotency (e2e)', () => {
       });
       expect(count).toBe(1);
 
-      await app.close();
+      if (app) await app.close();
     });
   });
 
@@ -207,7 +273,7 @@ describe('Idempotency (e2e)', () => {
       const counterparty = await prisma.counterparty.findFirst();
 
       if (!brand || !warehouse || !counterparty) {
-        await app.close();
+        if (app) await app.close();
         return; // Skip if test data not available
       }
 
@@ -231,7 +297,7 @@ describe('Idempotency (e2e)', () => {
       expect(res.body).toHaveProperty('id');
       expect(res.headers['x-idempotency-replay']).toBeUndefined();
 
-      await app.close();
+      if (app) await app.close();
     });
 
     it('should return same response on second request with same idempotency key', async () => {
@@ -244,7 +310,7 @@ describe('Idempotency (e2e)', () => {
       const counterparty = await prisma.counterparty.findFirst();
 
       if (!brand || !warehouse || !counterparty) {
-        await app.close();
+        if (app) await app.close();
         return; // Skip if test data not available
       }
 
@@ -282,7 +348,7 @@ describe('Idempotency (e2e)', () => {
       expect(res2.body).toEqual(res1.body);
       expect(res2.headers['x-idempotency-replay']).toBe('1');
 
-      await app.close();
+      if (app) await app.close();
     });
 
     it('should handle parallel requests correctly', async () => {
@@ -295,7 +361,7 @@ describe('Idempotency (e2e)', () => {
       const counterparty = await prisma.counterparty.findFirst();
 
       if (!brand || !warehouse || !counterparty) {
-        await app.close();
+        if (app) await app.close();
         return; // Skip if test data not available
       }
 
@@ -337,7 +403,7 @@ describe('Idempotency (e2e)', () => {
         res2.headers['x-idempotency-replay'] === '1';
       expect(hasReplay).toBe(true);
 
-      await app.close();
+      if (app) await app.close();
     });
   });
 
@@ -365,7 +431,7 @@ describe('Idempotency (e2e)', () => {
       // Should either succeed (if not required in test) or fail with 400 (if required)
       expect([200, 201, 400]).toContain(res.status);
 
-      await app.close();
+      if (app) await app.close();
     });
   });
 });

@@ -97,7 +97,7 @@ describe('Reconciliation controls (API-only, contract)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('summary + NEW queue work; NEW disappears after posting matched line; UNEXPLAINED_CASH shows manual tx', async () => {
@@ -233,6 +233,7 @@ describe('Reconciliation controls (API-only, contract)', () => {
       .expect(200);
   }, 120_000);
 });
+
 
 
 

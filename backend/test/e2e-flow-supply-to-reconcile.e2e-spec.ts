@@ -184,7 +184,7 @@ describe('TZ 8.2 Flow A — Supply receipt → AP → payment → bank statement
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('happy path', async () => {

@@ -81,7 +81,7 @@ describe('TZ 8.2 Flow D — Acquiring clearing + settlement reconcile (e2e)', ()
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('posts captured/fee/settlement into clearing, links settlement to statement line, explain shows AcquiringEvent + StatementLine', async () => {

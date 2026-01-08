@@ -58,7 +58,7 @@ describe('MoneyTransaction + balance + idempotency (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('creates idempotent IN, creates OUT, computes balance, rejects currency mismatch', async () => {
@@ -139,6 +139,7 @@ describe('MoneyTransaction + balance + idempotency (e2e)', () => {
       .expect(400);
   });
 });
+
 
 
 

@@ -192,7 +192,7 @@ describe('TZ 5 — SCM Supplies Scope Isolation (e2e)', () => {
 
   afterAll(async () => {
     if (app) {
-      await app.close();
+      if (app) await app.close();
     }
     await prisma.$disconnect();
   });

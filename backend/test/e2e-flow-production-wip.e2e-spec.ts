@@ -210,7 +210,7 @@ describe('TZ 8.2 Flow B — Production: consumption → WIP → completion (e2e)
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('consumption posts WIP and completion moves WIP -> FG; explain shows ProductionOrder', async () => {

@@ -138,7 +138,7 @@ describe('TZ 8.1 — posting idempotency + void/reverse/repost (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('PaymentExecution void: moneyTx VOIDED + reversal entry; idempotent on repeat', async () => {

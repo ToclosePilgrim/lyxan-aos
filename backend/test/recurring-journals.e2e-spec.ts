@@ -138,7 +138,7 @@ describe('TZ 6.3 — Recurring Journals (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('PREPAID: accrue auto-creates journal; run creates 3 recognition entries; re-run has no duplicates', async () => {

@@ -56,7 +56,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send({ status: 'success', data: { result: 'ok' } })
       .expect(401);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should reject callback with invalid Content-Type', async () => {
@@ -90,7 +90,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload)
       .expect(415); // Unsupported Media Type
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should reject callback with invalid signature', async () => {
@@ -119,7 +119,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload)
       .expect(401);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should reject callback with timestamp outside window', async () => {
@@ -154,7 +154,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload)
       .expect(401);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should accept callback with valid signature and timestamp', async () => {
@@ -199,7 +199,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
     expect(updatedRun?.status).toBe('SUCCESS');
     expect(updatedRun?.finishedAt).not.toBeNull();
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should reject replay of the same request', async () => {
@@ -243,7 +243,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload)
       .expect(401);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should accept different requests with same runId but different body', async () => {
@@ -298,7 +298,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload2)
       .expect(200);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('should reject callback for non-existent runId', async () => {
@@ -319,7 +319,7 @@ describe('Agents Callback HMAC Security (e2e)', () => {
       .send(payload)
       .expect(404); // Should pass HMAC but fail on runId lookup
 
-    await app.close();
+    if (app) await app.close();
   });
 });
 

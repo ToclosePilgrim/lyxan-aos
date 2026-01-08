@@ -110,7 +110,7 @@ describe('Marketplace fee anti-double-count (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('Scenario A: fee already in ledger -> links to existing entry (no double-count)', async () => {

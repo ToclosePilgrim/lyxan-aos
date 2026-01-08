@@ -229,6 +229,6 @@ describe('TZ 8.3.B.2 — Production API smoke (e2e)', () => {
     expect(completionEntry?.debitAccount).toBe('10.02');
     expect(completionEntry?.creditAccount).toBe('20.01');
 
-    await app.close();
+    if (app) await app.close();
   }, 120_000);
 });

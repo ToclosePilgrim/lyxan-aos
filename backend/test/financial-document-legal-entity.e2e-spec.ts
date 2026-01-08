@@ -142,7 +142,7 @@ describe('FinancialDocument legalEntityId resolution (API-only e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it('creates FinancialDocument from supply with resolved legalEntityId + categories + prepaid policy', async () => {
@@ -181,6 +181,7 @@ describe('FinancialDocument legalEntityId resolution (API-only e2e)', () => {
       .expect(422);
   });
 });
+
 
 
 

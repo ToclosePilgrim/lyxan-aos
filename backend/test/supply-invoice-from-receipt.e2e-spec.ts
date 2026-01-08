@@ -172,7 +172,7 @@ describe('TZ 8.3.B.3 — SupplyInvoice from SupplyReceipt contract (e2e)', () =>
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('receipt posts Inventory/AP; invoice-from-receipt accrues without duplicate posting; payment executes', async () => {

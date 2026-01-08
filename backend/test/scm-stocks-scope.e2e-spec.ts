@@ -214,7 +214,7 @@ describe('TZ 12 — SCM Stocks legacy alias is scope-isolated (e2e)', () => {
   });
 
   afterAll(async () => {
-    if (app) await app.close();
+    if (app) if (app) await app.close();
     await prisma.$disconnect();
   });
 
@@ -250,5 +250,6 @@ describe('TZ 12 — SCM Stocks legacy alias is scope-isolated (e2e)', () => {
       .expect(403);
   });
 });
+
 
 

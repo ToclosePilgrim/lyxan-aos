@@ -125,7 +125,7 @@ describe('TZ 8.4.3.4 — PaymentExecution PostingRun + void (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   async function createPaidExecution(amount: string) {

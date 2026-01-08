@@ -74,7 +74,7 @@ describe('TZ 4 — Inventory Events Multi-Movement OUT (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
     await prisma.$disconnect();
   });
 
@@ -299,5 +299,6 @@ describe('TZ 4 — Inventory Events Multi-Movement OUT (e2e)', () => {
     expect(outMovements.length).toBeGreaterThanOrEqual(2);
   });
 });
+
 
 

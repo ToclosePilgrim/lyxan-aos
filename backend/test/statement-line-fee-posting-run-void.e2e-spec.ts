@@ -109,7 +109,7 @@ describe('TZ 8.4.3.3 — StatementLine fee PostingRun + void/repost/unlink (e2e)
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('Scenario 1 (FEE_ENTRY_CREATED): post creates run+entry; void creates reversal; repeated void is idempotent', async () => {
@@ -382,6 +382,7 @@ describe('TZ 8.4.3.3 — StatementLine fee PostingRun + void/repost/unlink (e2e)
     expect(lineAfter.body.postedMoneyTransactionId).toBeNull();
   }, 120_000);
 });
+
 
 
 

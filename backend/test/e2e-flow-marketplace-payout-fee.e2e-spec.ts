@@ -134,7 +134,7 @@ describe('TZ 8.2 Flow C — Marketplace payout + fee anti-double-count (e2e)', (
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('payout transfer + fee posting without double-count; cashflow reconciliation holds', async () => {

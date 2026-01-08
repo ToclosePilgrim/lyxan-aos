@@ -104,7 +104,7 @@ describe('TZ 8.4.2 — CashTransfer posting via PostingRun + void (e2e)', () => 
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('post -> entries have postingRunId; void -> reversal; repeated void idempotent', async () => {

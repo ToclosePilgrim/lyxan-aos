@@ -140,7 +140,7 @@ describe('CashAccountingLink + internal transfer posting (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('posts internal transfer and creates 2 links; repeat is idempotent', async () => {
@@ -204,6 +204,7 @@ describe('CashAccountingLink + internal transfer posting (e2e)', () => {
     expect(byTx.get(inTx.id)).toBe(1);
   });
 });
+
 
 
 

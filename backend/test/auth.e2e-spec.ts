@@ -16,7 +16,7 @@ describe('Auth e2e', () => {
     expect(res.body).toHaveProperty('user');
     expect(res.body.user).toHaveProperty('email', 'admin@aos.local');
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('POST /api/auth/login should reject invalid credentials', async () => {
@@ -30,7 +30,7 @@ describe('Auth e2e', () => {
       })
       .expect(401);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('GET /api/auth/me should return current user with valid token', async () => {
@@ -55,6 +55,6 @@ describe('Auth e2e', () => {
 
     expect(meRes.body).toHaveProperty('email', 'admin@aos.local');
 
-    await app.close();
+    if (app) await app.close();
   });
 });

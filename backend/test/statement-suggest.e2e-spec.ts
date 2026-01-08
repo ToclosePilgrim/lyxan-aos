@@ -180,7 +180,7 @@ describe('StatementLine suggest (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('suggests PAYMENT_EXECUTION for matching OUT line', async () => {
@@ -233,6 +233,7 @@ describe('StatementLine suggest (e2e)', () => {
     expect(res.body.suggestedMatch.candidates.length).toBe(0);
   });
 });
+
 
 
 

@@ -26,9 +26,10 @@ describe('Architecture Boundary: SCM suppliers API must not exist', () => {
       expect([404, 410]).toContain(res.status);
     }
 
-    await app.close();
+    if (app) await app.close();
   });
 });
+
 
 
 

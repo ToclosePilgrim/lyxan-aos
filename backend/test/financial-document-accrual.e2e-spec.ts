@@ -108,7 +108,7 @@ describe('TZ 6.2 — FinancialDocument accrual engine (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('IMMEDIATE_EXPENSE: accrue is idempotent; payment requires accrual and then closes AP', async () => {

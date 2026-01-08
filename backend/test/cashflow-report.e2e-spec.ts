@@ -147,7 +147,7 @@ describe('TZ 7.2 — Cashflow report (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('cashflow report groups by category and reconciles cash delta to moneyTx net; transfers excluded only from byCategory when includeTransfers=false', async () => {

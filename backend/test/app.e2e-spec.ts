@@ -39,7 +39,7 @@ describe('AppController (e2e)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   it('/api/auth/me (GET) should return 401 unauthorized by default', () => {

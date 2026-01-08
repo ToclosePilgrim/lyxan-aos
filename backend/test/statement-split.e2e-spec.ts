@@ -88,7 +88,7 @@ describe('StatementLine split (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('splits parent into children; parent becomes SPLIT; parent cannot confirm/post; undoSplit works', async () => {

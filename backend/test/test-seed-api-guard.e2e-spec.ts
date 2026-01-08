@@ -20,7 +20,7 @@ describe('DevTools TestSeed API guardrails (e2e)', () => {
       .send({})
       .expect(404);
 
-    await app.close();
+    if (app) await app.close();
   });
 
   it('is available when ENABLE_TEST_SEED_API=true and creates TEST_SEED entry with metadata.source', async () => {
@@ -78,6 +78,6 @@ describe('DevTools TestSeed API guardrails (e2e)', () => {
     expect(res.body.metadata?.source).toBe('TEST_SEED');
     expect(res.body.metadata?.docLineId).toBe(`docLine:${le.id}:1`);
 
-    await app.close();
+    if (app) await app.close();
   });
 });

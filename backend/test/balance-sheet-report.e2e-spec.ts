@@ -135,7 +135,7 @@ describe('TZ 7.1 — Balance Sheet report (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-    await app.close();
+    if (app) await app.close();
   });
 
   it('returns balance sheet with equation check and explain drilldown', async () => {
